@@ -52,8 +52,8 @@ own data:
 
 Verify with two test users that one professor cannot read another's course.
 
-## Open Questions (resolve before freeze)
+## Decisions (resolved — implemented in `supabase/migrations/0001_init.sql`)
 
-- [ ] Embedding model & exact vector dimension (must match pgvector column).
-- [ ] `categories.difficulty_bands_json` shape (e.g. `["Easy","Medium","Hard"]` vs richer config).
-- [ ] Do we need a separate `students` table in Phase 1, or defer to Phase 3? (Default: defer.)
+- [x] Embedding dimension: **1536** (OpenAI `text-embedding-3-small`). Backend may re-confirm the model; dimension must match.
+- [x] `categories.difficulty_bands_json`: defaults to `["Easy","Medium","Hard"]` (jsonb array).
+- [x] `students` table: **deferred to Phase 3** (not in Phase 1).

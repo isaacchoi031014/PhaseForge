@@ -1,29 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  BarChart3,
-  Bell,
-  BookOpen,
-  ClipboardList,
-  FileText,
-  HelpCircle,
-  LayoutDashboard,
-  LogOut,
-  Plus,
-  Search,
-  Settings,
-} from "lucide-react";
+import { Bell, HelpCircle, LogOut, Plus, Search, Settings } from "lucide-react";
 
 import { logout } from "@/app/(auth)/actions";
+import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { createClient } from "@/lib/supabase/server";
-
-const nav = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, active: true },
-  { label: "Courses", href: "#", icon: BookOpen },
-  { label: "Source Materials", href: "#", icon: FileText },
-  { label: "Assessments", href: "#", icon: ClipboardList },
-  { label: "Analytics", href: "#", icon: BarChart3 },
-];
 
 export default async function DashboardLayout({
   children,
@@ -61,27 +42,15 @@ export default async function DashboardLayout({
           </div>
         </Link>
 
-        <button className="mb-6 flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800">
+        <Link
+          href="#"
+          className="mb-6 flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+        >
           <Plus className="size-4" />
           New Assessment
-        </button>
+        </Link>
 
-        <nav className="flex flex-col gap-1">
-          {nav.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
-                item.active
-                  ? "bg-gray-100 font-medium text-gray-900"
-                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-              }`}
-            >
-              <item.icon className="size-[18px]" />
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <SidebarNav />
 
         <div className="mt-auto flex flex-col gap-1 border-t border-gray-100 pt-3">
           <Link
@@ -105,7 +74,6 @@ export default async function DashboardLayout({
 
       {/* Main */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Topbar */}
         <header className="flex h-16 items-center gap-4 border-b border-gray-200 bg-white px-8">
           <div className="relative max-w-sm flex-1">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
