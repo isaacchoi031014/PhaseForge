@@ -1,17 +1,11 @@
 import Link from "next/link";
 
 import { login } from "@/app/(auth)/actions";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
+const labelCls =
+  "font-label-cosmic mb-2 block text-[10px] uppercase tracking-widest text-[#c4c7c8]";
+const inputCls =
+  "font-body-cosmic w-full rounded-lg border border-[#444748]/40 bg-[#1b1c1d] px-4 py-3 text-sm text-[#e3e2e3] outline-none transition placeholder:text-[#c4c7c8]/40 focus:border-white/40 focus:ring-1 focus:ring-white/20";
 
 export default async function LoginPage({
   searchParams,
@@ -21,52 +15,62 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle className="text-xl">Welcome back</CardTitle>
-        <CardDescription>Log in to your instructor account.</CardDescription>
-      </CardHeader>
-      <form action={login}>
-        <CardContent className="flex flex-col gap-4">
-          {error && (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="you@university.edu"
-              autoComplete="email"
-              required
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          </div>
-        </CardContent>
-        <CardFooter className="mt-6 flex flex-col gap-4">
-          <Button type="submit" className="w-full">
-            Log in
-          </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="font-medium text-foreground underline-offset-4 hover:underline">
-              Sign up
-            </Link>
+    <div className="glass-panel rounded-2xl p-8 shadow-[inset_0_0_90px_rgba(46,64,140,0.14)] sm:p-10">
+      <h1 className="font-display text-3xl">Welcome back</h1>
+      <p className="mt-2 text-sm text-[#c4c7c8]">
+        Log in to your instructor account.
+      </p>
+
+      <form action={login} className="mt-8 flex flex-col gap-5">
+        {error && (
+          <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {error}
           </p>
-        </CardFooter>
+        )}
+        <div>
+          <label htmlFor="email" className={labelCls}>
+            Email
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            placeholder="you@university.edu"
+            autoComplete="email"
+            required
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label htmlFor="password" className={labelCls}>
+            Password
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            className={inputCls}
+          />
+        </div>
+        <button
+          type="submit"
+          className="active-glow mt-2 w-full rounded-xl bg-white py-3 text-sm font-semibold text-[#16181a] transition hover:opacity-90 active:scale-[0.98]"
+        >
+          Log in
+        </button>
       </form>
-    </Card>
+
+      <p className="mt-8 text-center text-sm text-[#c4c7c8]/80">
+        Don&apos;t have an account?{" "}
+        <Link
+          href="/signup"
+          className="font-medium text-[#e3e2e3] underline-offset-4 hover:underline"
+        >
+          Sign up
+        </Link>
+      </p>
+    </div>
   );
 }

@@ -1,265 +1,326 @@
+import Link from "next/link";
 import {
   AlertTriangle,
-  CheckCircle2,
-  Cpu,
-  Eye,
+  ArrowRight,
+  BookOpen,
+  CalendarClock,
+  Check,
+  FileText,
+  Layers,
   Sparkles,
-  Upload,
-  Zap,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 
-const activeAssessments = [
-  {
-    code: "PHYS-201",
-    status: "LIVE",
-    live: true,
-    title: "Midterm: Thermodynamics",
-    students: 142,
-    mastery: "0.78",
-    remaining: "24m",
-    progress: 62,
-  },
-  {
-    code: "CS-105",
-    status: "45m left",
-    live: false,
-    title: "Quiz: Data Structures",
-    students: 89,
-    mastery: "0.62",
-    remaining: "45m",
-    progress: 28,
-  },
-];
+type MaterialRow = {
+  id: string;
+  filename: string;
+  type: string;
+  status: string;
+  course: { title: string } | null;
+};
 
-const recentActivity = [
-  {
-    icon: AlertTriangle,
-    tint: "text-amber-500 bg-amber-50",
-    title: "Concept Gap Flagged",
-    time: "12m ago",
-    body: "AI flagged 15 students with a concept gap in Thermodynamics, Chapter 3. Difficulty adjustment recommended.",
-  },
-  {
-    icon: Sparkles,
-    tint: "text-violet-500 bg-violet-50",
-    title: "New Item Family Generated",
-    time: "1h ago",
-    body: "A new item family was generated for Chapter 4: Fluid Dynamics. 24 new questions are awaiting review.",
-  },
-  {
-    icon: CheckCircle2,
-    tint: "text-emerald-500 bg-emerald-50",
-    title: "Assessment Finalized",
-    time: "3h ago",
-    body: "Linear Algebra Quiz #2 grading is complete. Average score: 84.2.",
-  },
-];
+const TYPE_LABELS: Record<string, string> = {
+  syllabus: "Syllabus",
+  lecture: "Lecture slides",
+  notes: "Notes",
+  past_exam: "Past exam",
+};
 
-const masteryOverview = [
-  { label: "Conceptual Accuracy", value: "94.2%" },
-  { label: "AI Item Validity", value: "98.1%" },
-  { label: "Total Generated", value: "15,402" },
-];
+const STATUS_STYLES: Record<string, string> = {
+  uploaded: "bg-[#343536] text-[#c4c7c8] border-[#444748]/30",
+  processing: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  done: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  error: "bg-red-500/10 text-red-400 border-red-500/20",
+};
 
 export default async function DashboardPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
   const name =
     (user?.user_metadata?.name as string | undefined) ??
     user?.email?.split("@")[0] ??
     "Professor";
   const lastName = name.split(" ").slice(-1)[0];
 
+  const [{ count: coursesCount }, { count: topicsCount }, { data: materials }] =
+    await Promise.all([
+      supabase.from("courses").select("id", { count: "exact", head: true }),
+      supabase.from("categories").select("id", { count: "exact", head: true }),
+      supabase
+        .from("materials")
+        .select("id, filename, type, status, course:courses(title)")
+        .order("created_at", { ascending: false }),
+    ]);
+
+  const materialList = (materials ?? []) as unknown as MaterialRow[];
+  const nCourses = coursesCount ?? 0;
+  const nTopics = topicsCount ?? 0;
+  const nMaterials = materialList.length;
+  const nFamilies = 0; // Phase 2 — no item families yet.
+
+  const statusCounts: Record<string, number> = {
+    uploaded: 0,
+    processing: 0,
+    done: 0,
+    error: 0,
+  };
+  for (const m of materialList) {
+    statusCounts[m.status] = (statusCounts[m.status] ?? 0) + 1;
+  }
+
+  // Setup checklist — derived from real workspace state.
+  const steps = [
+    {
+      label: "Create a course",
+      hint: "Your course workspace.",
+      done: nCourses > 0,
+      href: "/courses",
+    },
+    {
+      label: "Upload course materials",
+      hint: "Lecture slides, notes, syllabus, past exams.",
+      done: nMaterials > 0,
+      href: "/courses",
+    },
+    {
+      label: "Review topics",
+      hint: "Organize the course into topics.",
+      done: nTopics > 0,
+      href: "/courses",
+    },
+    {
+      label: "Generate question families",
+      hint: "Professor-aligned variants (coming soon).",
+      done: nFamilies > 0,
+      href: "#",
+    },
+    {
+      label: "Configure an assessment",
+      hint: "Windows, counts, and difficulty bands (coming soon).",
+      done: false,
+      href: "#",
+    },
+  ];
+  const completed = steps.filter((s) => s.done).length;
+  const readiness = Math.round((completed / steps.length) * 100);
+  const nextStep = steps.find((s) => !s.done);
+
+  const stats = [
+    { label: "Active courses", value: nCourses, icon: BookOpen, sub: "Course workspace" },
+    { label: "Uploaded materials", value: nMaterials, icon: FileText, sub: "Slides, notes, exams" },
+    { label: "Topics", value: nTopics, icon: Layers, sub: "Review before generation" },
+    { label: "Question families", value: nFamilies, icon: Sparkles, sub: "Generated from materials" },
+  ];
+
+  const processing = [
+    { label: "Uploaded", value: statusCounts.uploaded, dot: "bg-[#c4c7c8]" },
+    { label: "Processing", value: statusCounts.processing, dot: "bg-amber-400" },
+    { label: "Ready", value: statusCounts.done, dot: "bg-emerald-400" },
+    { label: "Needs attention", value: statusCounts.error, dot: "bg-red-400" },
+  ];
+
+  const recent = materialList.slice(0, 5);
+
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-[1400px]">
       {/* Greeting */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Good morning, Professor {lastName}.
+          <h1 className="font-display text-[32px] leading-tight tracking-tight">
+            Welcome back, Professor {lastName}.
           </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            3 assessments are in progress, and the AI is generating new
-            questions.
+          <p className="mt-2 text-[#c4c7c8]">
+            Set up materials, generate question families, and launch adaptive
+            assessments.
           </p>
         </div>
-        <div className="flex gap-2">
-          <button className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium transition hover:bg-gray-50">
-            <Upload className="size-4" />
-            Upload Lecture Notes
-          </button>
-          <button className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium transition hover:bg-gray-50">
-            <Eye className="size-4" />
-            View Conceptual Gaps
-          </button>
-        </div>
+        <Link
+          href="/courses"
+          className="active-glow flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-[#16181a] transition hover:opacity-90 active:scale-[0.98]"
+        >
+          <FileText className="size-4" strokeWidth={2} />
+          Upload materials
+        </Link>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-        {/* Left column */}
-        <div className="flex flex-col gap-8">
-          {/* Active Assessments */}
-          <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Active Assessments</h2>
-              <button className="text-sm font-medium text-gray-500 hover:text-gray-900">
-                View all
-              </button>
+      {/* Stat cards */}
+      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {stats.map((s) => (
+          <div key={s.label} className="glass-panel rounded-2xl p-5">
+            <div className="mb-3 flex size-9 items-center justify-center rounded-lg border border-[#444748]/40 bg-[#1b1c1d]">
+              <s.icon className="size-[18px] text-[#c4c7c8]" strokeWidth={1.5} />
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {activeAssessments.map((a) => (
-                <div
-                  key={a.code}
-                  className="rounded-xl border border-gray-200 bg-white p-5"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                      {a.code}
-                    </span>
-                    <span
-                      className={`flex items-center gap-1.5 text-xs font-medium ${
-                        a.live ? "text-red-500" : "text-gray-400"
-                      }`}
-                    >
-                      {a.live && (
-                        <span className="size-1.5 rounded-full bg-red-500" />
-                      )}
-                      {a.status}
-                    </span>
-                  </div>
-                  <h3 className="mt-3 text-base font-semibold">{a.title}</h3>
-                  <div className="mt-5 grid grid-cols-3 gap-2 text-center">
-                    <Stat label="Students" value={String(a.students)} />
-                    <Stat label="Mastery θ" value={a.mastery} />
-                    <Stat label="Remaining" value={a.remaining} />
-                  </div>
-                  <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-gray-100">
-                    <div
-                      className="h-full rounded-full bg-gray-900"
-                      style={{ width: `${a.progress}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+            <div className="font-display text-3xl">{s.value}</div>
+            <div className="font-label-cosmic mt-1 text-[10px] uppercase tracking-widest text-[#c4c7c8]/70">
+              {s.label}
             </div>
-          </section>
+            <div className="mt-1 text-xs text-[#c4c7c8]/50">{s.sub}</div>
+          </div>
+        ))}
+      </div>
 
-          {/* Recent Activity */}
-          <section>
-            <h2 className="mb-4 text-lg font-semibold">Recent Activity</h2>
-            <div className="flex flex-col gap-3">
-              {recentActivity.map((r) => (
+      {/* Row: Next steps | Assessment drafts | Processing + Readiness */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.3fr_1fr_1fr]">
+        {/* Next steps */}
+        <div className="glass-panel rounded-2xl p-6">
+          <h2 className="font-display text-xl">Next steps</h2>
+          <p className="mt-1 text-sm text-[#c4c7c8]/70">
+            Complete setup before launching your first assessment.
+          </p>
+          <ol className="mt-5 flex flex-col gap-4">
+            {steps.map((s, i) => (
+              <li key={s.label} className="flex gap-3">
                 <div
-                  key={r.title}
-                  className="flex gap-4 rounded-xl border border-gray-200 bg-white p-4"
+                  className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-[11px] ${
+                    s.done
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      : "border-[#444748]/40 bg-[#1b1c1d] text-[#c4c7c8]"
+                  }`}
                 >
-                  <div
-                    className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${r.tint}`}
-                  >
-                    <r.icon className="size-[18px]" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold">{r.title}</h3>
-                      <span className="text-xs text-gray-400">{r.time}</span>
-                    </div>
-                    <p className="mt-1 text-sm text-gray-500">{r.body}</p>
-                  </div>
+                  {s.done ? <Check className="size-3.5" strokeWidth={2.5} /> : i + 1}
                 </div>
-              ))}
-            </div>
-          </section>
+                <div>
+                  <p
+                    className={`text-sm font-semibold ${
+                      s.done ? "text-[#c4c7c8]/60 line-through" : "text-[#e3e2e3]"
+                    }`}
+                  >
+                    {s.label}
+                  </p>
+                  <p className="text-xs text-[#c4c7c8]/50">{s.hint}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          {nextStep && (
+            <Link
+              href={nextStep.href}
+              className="active-glow mt-6 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#16181a] transition hover:opacity-90 active:scale-[0.98]"
+            >
+              Continue setup
+              <ArrowRight className="size-4" strokeWidth={2} />
+            </Link>
+          )}
         </div>
 
-        {/* Right column */}
-        <div className="flex flex-col gap-6">
-          {/* Item Pipeline (dark) */}
-          <div className="rounded-xl bg-gray-900 p-5 text-white">
-            <div className="mb-5 flex items-center gap-2">
-              <Zap className="size-5" />
-              <h2 className="text-base font-semibold">Item Pipeline</h2>
-            </div>
-
-            <PipelineRow label="Source Material RAG" value="Processing..." progress={70} />
-            <PipelineRow label="Family Generation" value="Idle" progress={0} />
-            <div className="mb-1 mt-4 flex items-center justify-between text-sm">
-              <span className="text-gray-300">Pre-generation Buffer</span>
-              <span className="font-medium">85% Full</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-white" style={{ width: "85%" }} />
-            </div>
-            <p className="mt-2 text-[0.7rem] uppercase tracking-wide text-gray-400">
-              Estimated 1,240 items ready in cache
+        {/* Assessment drafts (Phase 3) */}
+        <div className="glass-panel flex flex-col rounded-2xl p-6">
+          <h2 className="font-display text-xl">Assessment drafts</h2>
+          <div className="flex flex-1 flex-col items-center justify-center py-8 text-center">
+            <p className="text-sm font-semibold text-[#e3e2e3]">
+              No assessments yet
             </p>
-
-            <div className="mt-5 flex items-center gap-3 border-t border-white/10 pt-4">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-white/10">
-                <Cpu className="size-[18px]" />
-              </div>
-              <div className="leading-tight">
-                <div className="text-[0.7rem] text-gray-400">System Health</div>
-                <div className="text-sm font-medium">Optimal Performance</div>
-              </div>
-            </div>
+            <p className="mt-1 text-sm text-[#c4c7c8]/60">
+              Create your first AI-adaptive assessment once materials are ready.
+            </p>
+            <span className="mt-5 cursor-not-allowed rounded-xl border border-[#444748]/40 bg-[#1b1c1d] px-4 py-2 text-sm text-[#c4c7c8]/50">
+              New assessment · soon
+            </span>
           </div>
+        </div>
 
-          {/* Mastery Overview */}
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Mastery Overview
+        {/* Processing + Readiness */}
+        <div className="flex flex-col gap-6">
+          <div className="glass-panel rounded-2xl p-6">
+            <h2 className="font-label-cosmic mb-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c4c7c8]">
+              Material processing
             </h2>
             <div className="flex flex-col gap-3">
-              {masteryOverview.map((m) => (
-                <div key={m.label} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">{m.label}</span>
-                  <span className="text-sm font-semibold">{m.value}</span>
+              {processing.map((p) => (
+                <div key={p.label} className="flex items-center justify-between">
+                  <span className="flex items-center gap-2.5 text-sm text-[#c4c7c8]">
+                    <span className={`size-2 rounded-full ${p.dot}`} />
+                    {p.label}
+                  </span>
+                  <span className="font-display text-lg">{p.value}</span>
                 </div>
               ))}
             </div>
-            <button className="mt-5 w-full rounded-lg border border-gray-200 py-2 text-sm font-medium transition hover:bg-gray-50">
-              Download Report
-            </button>
+          </div>
+
+          <div className="glass-panel rounded-2xl p-6">
+            <h2 className="font-label-cosmic text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c4c7c8]">
+              Course readiness
+            </h2>
+            <p className="mt-3 text-sm font-semibold">
+              {completed} of {steps.length} setup steps complete
+            </p>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#343536]">
+              <div
+                className="cosmic-fill h-full rounded-full bg-white"
+                style={{ width: `${readiness}%` }}
+              />
+            </div>
+            <p className="font-label-cosmic mt-4 text-[10px] uppercase tracking-wider text-[#c4c7c8]/50">
+              Continue setup to enable generation
+            </p>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[0.7rem] text-gray-400">{label}</div>
-      <div className="mt-0.5 text-xl font-bold">{value}</div>
-    </div>
-  );
-}
+      {/* Row: Recent activity | Upcoming windows */}
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1.3fr_1fr]">
+        <div className="glass-panel rounded-2xl p-6">
+          <h2 className="font-display text-xl">Recent activity</h2>
+          {recent.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-sm font-semibold text-[#e3e2e3]">
+                No activity yet
+              </p>
+              <p className="mt-1 text-sm text-[#c4c7c8]/60">
+                Uploads and processing updates will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-col gap-3">
+              {recent.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between rounded-xl border border-[#444748]/20 bg-[#1b1c1d]/40 p-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <FileText
+                      className="size-4 text-[#c4c7c8]"
+                      strokeWidth={1.5}
+                    />
+                    <div>
+                      <p className="text-sm font-medium">{m.filename}</p>
+                      <p className="font-label-cosmic mt-0.5 text-[10px] uppercase tracking-wider text-[#c4c7c8]/60">
+                        {m.course?.title ?? "—"} ·{" "}
+                        {TYPE_LABELS[m.type] ?? m.type}
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`font-label-cosmic rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-wider ${
+                      STATUS_STYLES[m.status] ??
+                      "bg-[#343536] text-[#c4c7c8] border-[#444748]/30"
+                    }`}
+                  >
+                    {m.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-function PipelineRow({
-  label,
-  value,
-  progress,
-}: {
-  label: string;
-  value: string;
-  progress: number;
-}) {
-  return (
-    <div className="mb-3">
-      <div className="mb-1 flex items-center justify-between text-sm">
-        <span className="text-gray-300">{label}</span>
-        <span className="font-medium">{value}</span>
-      </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-        <div
-          className="h-full rounded-full bg-white/70"
-          style={{ width: `${progress}%` }}
-        />
+        <div className="glass-panel flex flex-col rounded-2xl p-6">
+          <h2 className="font-display text-xl">Upcoming windows</h2>
+          <div className="flex flex-1 flex-col items-center justify-center py-8 text-center">
+            <CalendarClock className="size-6 text-[#c4c7c8]/50" strokeWidth={1.5} />
+            <p className="mt-3 text-sm font-semibold text-[#e3e2e3]">
+              No scheduled assessments
+            </p>
+            <p className="mt-1 text-sm text-[#c4c7c8]/60">
+              Scheduled exam windows will appear here.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

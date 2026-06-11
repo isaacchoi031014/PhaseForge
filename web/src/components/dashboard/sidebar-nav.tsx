@@ -22,7 +22,7 @@ export function SidebarNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-col gap-1">
+    <nav className="flex flex-1 flex-col gap-1">
       {items.map((item) => {
         const active =
           item.href !== "#" &&
@@ -31,13 +31,13 @@ export function SidebarNav() {
           <Link
             key={item.label}
             href={item.href}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+            className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-all duration-200 ${
               active
-                ? "bg-gray-100 font-medium text-gray-900"
-                : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                ? "active-glow bg-[#292a2b] font-semibold text-[#e3e2e3]"
+                : "text-[#c4c7c8]/80 hover:bg-[#1b1c1d] hover:text-[#e3e2e3]"
             }`}
           >
-            <item.icon className="size-[18px]" />
+            <item.icon className="size-[18px]" strokeWidth={1.5} />
             {item.label}
           </Link>
         );

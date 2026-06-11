@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Cormorant_Garamond } from "next/font/google";
+import {
+  Geist,
+  Geist_Mono,
+  Cormorant_Garamond,
+  Libre_Caslon_Text,
+  Hanken_Grotesk,
+  JetBrains_Mono,
+} from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,6 +25,25 @@ const cormorant = Cormorant_Garamond({
   weight: ["300", "400", "500", "600"],
 });
 
+// ── Cosmic Academic type system (dashboard) ──────────────────────────
+const libreCaslon = Libre_Caslon_Text({
+  variable: "--font-libre",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+});
+
+const hankenGrotesk = Hanken_Grotesk({
+  variable: "--font-hanken",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains",
+  subsets: ["latin"],
+  weight: ["400", "500"],
+});
+
 export const metadata: Metadata = {
   title: "PhaseForge",
   description:
@@ -32,7 +58,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} ${libreCaslon.variable} ${hankenGrotesk.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

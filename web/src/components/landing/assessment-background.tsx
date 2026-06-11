@@ -2,17 +2,15 @@
 
 import { useEffect, useRef } from "react";
 
+import { GLYPH_FONT, randomGlyph } from "@/components/landing/glyphs";
+
 /**
- * Themed, dynamic background: a slow field of drifting mathematical glyphs and
- * expression fragments — evoking the exam / adaptive-assessment domain.
+ * Themed, dynamic background: a slow field of drifting STEM glyphs and
+ * expression fragments (math, CS, chemistry, electronics, biology,
+ * engineering) — evoking the exam / adaptive-assessment domain.
  * Glyphs twinkle, rise, and respond subtly to the pointer (parallax).
  * Respects prefers-reduced-motion (renders a single static frame).
  */
-const GLYPHS = [
-  "∫", "∑", "√", "π", "θ", "λ", "∇", "∂", "Δ", "α", "β", "σ", "μ", "∞",
-  "≈", "≠", "≤", "≥", "→", "∈", "⊂", "∮", "∴", "∝", "∀", "∃", "ρ", "φ",
-  "f(x)", "dy/dx", "x²", "e^x", "P(A)", "lim", "log", "Σ", "½", "∂/∂x",
-];
 
 export function AssessmentBackground({
   className,
@@ -77,7 +75,7 @@ export function AssessmentBackground({
           alpha: 0.04 + Math.random() * 0.12,
           phase: Math.random() * Math.PI * 2,
           depth: size / 38,
-          sym: GLYPHS[Math.floor(Math.random() * GLYPHS.length)],
+          sym: randomGlyph(),
         };
       });
     }
@@ -119,7 +117,7 @@ export function AssessmentBackground({
         const ox = mx * g.depth * 20;
         const oy = my * g.depth * 20;
 
-        ctx.font = `${g.size}px Georgia, "Times New Roman", serif`;
+        ctx.font = `${g.size}px ${GLYPH_FONT}`;
         ctx.fillStyle = `rgba(255,255,255,${a})`;
         ctx.fillText(g.sym, g.x + ox, g.y + oy);
       }

@@ -128,3 +128,66 @@
     @apply font-sans;
   }
 }
+
+/* ── Cosmic Academic theme (dashboard area) ───────────────────────────
+   Must live inside @layer so Tailwind v4 + Turbopack emits these rules;
+   unlayered top-level CSS in the entry file gets dropped. */
+@layer components {
+  .font-display {
+    font-family: var(--font-libre), ui-serif, Georgia, serif;
+  }
+  .font-body-cosmic {
+    font-family: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  }
+  .font-label-cosmic {
+    font-family: var(--font-jetbrains), ui-monospace, monospace;
+    letter-spacing: 0.05em;
+  }
+
+  .cosmic-bg {
+    background-color: #060607;
+    background-image:
+      radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.025) 0%, transparent 55%),
+      radial-gradient(ellipse 60% 60% at 10% 95%, rgba(46, 64, 140, 0.06) 0%, transparent 50%),
+      radial-gradient(circle at 88% 25%, rgba(46, 64, 140, 0.07) 0%, transparent 45%);
+  }
+
+  .glass-panel {
+    background: rgba(10, 10, 12, 0.72);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .active-glow {
+    box-shadow: 0 0 24px rgba(255, 255, 255, 0.05);
+  }
+
+  .cosmic-fill {
+    transform-origin: left;
+    animation: cosmic-fill 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Slim scrollbar scoped to the cosmic surface */
+  .cosmic-bg ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .cosmic-bg ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .cosmic-bg ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
+}
+
+/* Animated progress / meter fills that grow in on mount */
+@keyframes cosmic-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}

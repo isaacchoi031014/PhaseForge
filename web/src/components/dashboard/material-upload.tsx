@@ -6,26 +6,27 @@ import { Loader2, Upload } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 
-type Category = { id: string; name: string };
-type MaterialType = "lecture" | "notes" | "past_exam";
+type Topic = { id: string; name: string };
+export type MaterialType = "syllabus" | "lecture" | "notes" | "past_exam";
 
-const TYPES: { value: MaterialType; label: string }[] = [
-  { value: "lecture", label: "Lecture slides" },
-  { value: "notes", label: "Notes" },
-  { value: "past_exam", label: "Past exam" },
-];
+const fieldCls =
+  "rounded-lg border border-[#444748]/40 bg-[#1b1c1d] px-3 py-2.5 text-sm text-[#e3e2e3] outline-none transition focus:border-white/40";
 
 export function MaterialUpload({
   courseId,
-  categories,
+  topics,
+  types,
+  showTopic = true,
 }: {
   courseId: string;
-  categories: Category[];
+  topics: Topic[];
+  types: { value: MaterialType; label: string }[];
+  showTopic?: boolean;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [type, setType] = useState<MaterialType>("lecture");
-  const [categoryId, setCategoryId] = useState<string>("");
+  const [type, setType] = useState<MaterialType>(types[0].value);
+  const [topicId, setTopicId] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +49,7 @@ export function MaterialUpload({
       return;
     }
 
+    const chosenType = types.length > 1 ? type : types[0].value;
     const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
     const path = `${user.id}/${courseId}/${Date.now()}-${safeName}`;
 
@@ -64,8 +66,8 @@ export function MaterialUpload({
       .from("materials")
       .insert({
         course_id: courseId,
-        category_id: categoryId || null,
-        type,
+        category_id: showTopic ? topicId || null : null,
+        type: chosenType,
         filename: file.name,
         storage_path: path,
         status: "uploaded",
@@ -102,66 +104,72 @@ export function MaterialUpload({
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
+    <div className="glass-panel rounded-2xl p-5">
       {error && (
-        <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+        <p className="mb-3 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-400">
           {error}
         </p>
       )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium text-gray-500">
+          <label className="font-label-cosmic mb-2 block text-[10px] uppercase tracking-widest text-[#c4c7c8]">
             File (PDF)
           </label>
           <input
             ref={fileRef}
             type="file"
             accept=".pdf,application/pdf"
-            className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-gray-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-gray-800"
+            className="block w-full text-sm text-[#c4c7c8] file:mr-3 file:rounded-md file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-[#16181a] hover:file:opacity-90"
           />
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">
-            Type
-          </label>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value as MaterialType)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
-          >
-            {TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
+        {types.length > 1 && (
+          <div>
+            <label className="font-label-cosmic mb-2 block text-[10px] uppercase tracking-widest text-[#c4c7c8]">
+              Type
+            </label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as MaterialType)}
+              className={fieldCls}
+            >
+              {types.map((t) => (
+                <option key={t.value} value={t.value} className="bg-[#1b1c1d]">
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {showTopic && (
+          <div>
+            <label className="font-label-cosmic mb-2 block text-[10px] uppercase tracking-widest text-[#c4c7c8]">
+              Topic
+            </label>
+            <select
+              value={topicId}
+              onChange={(e) => setTopicId(e.target.value)}
+              className={fieldCls}
+            >
+              <option value="" className="bg-[#1b1c1d]">
+                — none —
               </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">
-            Category
-          </label>
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
-          >
-            <option value="">— none —</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+              {topics.map((c) => (
+                <option key={c.id} value={c.id} className="bg-[#1b1c1d]">
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <button
           onClick={handleUpload}
           disabled={busy}
-          className="flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-60"
+          className="active-glow flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-[#16181a] transition hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
         >
           {busy ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-4 animate-spin" strokeWidth={2} />
           ) : (
-            <Upload className="size-4" />
+            <Upload className="size-4" strokeWidth={2} />
           )}
           Upload
         </button>

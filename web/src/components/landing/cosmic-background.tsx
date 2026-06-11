@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
+import { GLYPH_FONT, randomGlyph } from "@/components/landing/glyphs";
+
 /**
  * Cosmic background ported from the Stitch "Animated Cosmic Landing Page".
  * Three layers, no external assets:
@@ -9,14 +11,11 @@ import { useEffect, useRef } from "react";
  *  2. a drifting atmosphere overlay that shifts light across the void,
  *  3. a canvas starfield — most points twinkle, a few larger "knowledge"
  *     particles drift upward with a soft glow.
+ * Drifting STEM glyphs (math, CS, chemistry, electronics, biology, engineering)
+ * float behind it all — see @/components/landing/glyphs.
  * Canvas is sized to its parent; respects prefers-reduced-motion (static frame,
  * CSS animations disabled). `opacity` lets text-heavy sections dim the field.
  */
-const GLYPHS = [
-  "∫", "∑", "√", "π", "θ", "λ", "∇", "∂", "Δ", "α", "β", "σ", "μ", "∞",
-  "≈", "≠", "≤", "≥", "→", "∈", "⊂", "∮", "∴", "∝", "ρ", "φ",
-  "f(x)", "dy/dx", "x²", "e^x", "P(A)", "lim", "log", "½", "∂/∂x",
-];
 
 export function CosmicBackground({
   className,
@@ -83,7 +82,7 @@ export function CosmicBackground({
         vx: (Math.random() - 0.5) * 0.12,
         vy: -(0.05 + Math.random() * 0.15),
         size: 16 + Math.random() * 30,
-        sym: GLYPHS[Math.floor(Math.random() * GLYPHS.length)],
+        sym: randomGlyph(),
         life: Math.random() * 220,
         maxLife: 320 + Math.random() * 280,
         alphaMax: 0.05 + Math.random() * 0.08,
@@ -166,7 +165,7 @@ export function CosmicBackground({
         const t = g.life / g.maxLife;
         const env = Math.max(0, Math.min(1, t / 0.25, (1 - t) / 0.25));
         const a = g.alphaMax * env * opacity;
-        ctx.font = `${g.size}px Georgia, "Times New Roman", serif`;
+        ctx.font = `${g.size}px ${GLYPH_FONT}`;
         ctx.fillStyle = `rgba(255, 255, 255, ${a})`;
         ctx.fillText(g.sym, g.x, g.y);
       }
