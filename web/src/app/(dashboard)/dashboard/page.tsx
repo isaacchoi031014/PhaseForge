@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  AlertTriangle,
   ArrowRight,
   BookOpen,
   CalendarClock,
@@ -94,15 +93,15 @@ export default async function DashboardPage() {
     },
     {
       label: "Generate question families",
-      hint: "Professor-aligned variants (coming soon).",
+      hint: "Professor-aligned, reusable variants.",
       done: nFamilies > 0,
-      href: "#",
+      href: "/question-families",
     },
     {
       label: "Configure an assessment",
-      hint: "Windows, counts, and difficulty bands (coming soon).",
+      hint: "Topics, counts, difficulty, and windows.",
       done: false,
-      href: "#",
+      href: "/assessments/new",
     },
   ];
   const completed = steps.filter((s) => s.done).length;
@@ -171,28 +170,43 @@ export default async function DashboardPage() {
           <p className="mt-1 text-sm text-[#c4c7c8]/70">
             Complete setup before launching your first assessment.
           </p>
-          <ol className="mt-5 flex flex-col gap-4">
+          <ol className="mt-5 flex flex-col gap-1">
             {steps.map((s, i) => (
-              <li key={s.label} className="flex gap-3">
-                <div
-                  className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-[11px] ${
-                    s.done
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                      : "border-[#444748]/40 bg-[#1b1c1d] text-[#c4c7c8]"
-                  }`}
+              <li key={s.label}>
+                <Link
+                  href={s.href}
+                  className="-mx-2 flex items-start gap-3 rounded-xl px-2 py-2 transition hover:bg-[#1b1c1d]/60"
                 >
-                  {s.done ? <Check className="size-3.5" strokeWidth={2.5} /> : i + 1}
-                </div>
-                <div>
-                  <p
-                    className={`text-sm font-semibold ${
-                      s.done ? "text-[#c4c7c8]/60 line-through" : "text-[#e3e2e3]"
+                  <div
+                    className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-[11px] ${
+                      s.done
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                        : "border-[#444748]/40 bg-[#1b1c1d] text-[#c4c7c8]"
                     }`}
                   >
-                    {s.label}
-                  </p>
-                  <p className="text-xs text-[#c4c7c8]/50">{s.hint}</p>
-                </div>
+                    {s.done ? (
+                      <Check className="size-3.5" strokeWidth={2.5} />
+                    ) : (
+                      i + 1
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p
+                      className={`text-sm font-semibold ${
+                        s.done
+                          ? "text-[#c4c7c8]/60 line-through"
+                          : "text-[#e3e2e3]"
+                      }`}
+                    >
+                      {s.label}
+                    </p>
+                    <p className="text-xs text-[#c4c7c8]/50">{s.hint}</p>
+                  </div>
+                  <ArrowRight
+                    className="mt-1 size-4 shrink-0 text-[#c4c7c8]/20"
+                    strokeWidth={1.5}
+                  />
+                </Link>
               </li>
             ))}
           </ol>

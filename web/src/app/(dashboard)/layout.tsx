@@ -51,7 +51,7 @@ export default async function DashboardLayout({
         </Link>
 
         <Link
-          href="#"
+          href="/assessments/new"
           className="active-glow mb-10 flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#1b1c1d] px-4 py-3 text-sm font-semibold text-[#e3e2e3] transition hover:border-white/20 hover:bg-[#232425] active:scale-[0.98]"
         >
           <Plus className="size-4" strokeWidth={2} />

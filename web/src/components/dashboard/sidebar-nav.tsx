@@ -13,8 +13,8 @@ import {
 const items = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Courses", href: "/courses", icon: BookOpen },
-  { label: "Source Materials", href: "#", icon: FileText },
-  { label: "Assessments", href: "#", icon: ClipboardList },
+  { label: "Source Materials", href: "/materials", icon: FileText },
+  { label: "Assessments", href: "/assessments", icon: ClipboardList },
   { label: "Analytics", href: "#", icon: BarChart3 },
 ];
 
