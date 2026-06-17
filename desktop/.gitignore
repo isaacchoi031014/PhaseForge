@@ -1,0 +1,11 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+
+# env (publishable key is shippable, but keep it out of git)
+.env
+.env.*
+!.env.example
