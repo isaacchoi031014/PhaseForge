@@ -19,6 +19,13 @@ const STATUS_STYLES: Record<string, string> = {
   closed: "bg-red-500/10 text-red-400 border-red-500/20",
 };
 
+const TABS = [
+  { label: "All", value: "all" },
+  { label: "Live", value: "open" },
+  { label: "Drafts", value: "draft" },
+  { label: "Past", value: "closed" },
+];
+
 function windowLabel(a: AssessmentRow): string {
   if (a.window_open || a.window_close) {
     const fmt = (s: string | null): string =>
@@ -33,15 +40,23 @@ function windowLabel(a: AssessmentRow): string {
   return "Always open";
 }
 
-export default async function AssessmentsPage() {
+export default async function AssessmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const { status = "all" } = await searchParams;
   const supabase = await createClient();
-  const { data } = await supabase
+
+  let query = supabase
     .from("assessments")
     .select(
       "id, title, code, status, window_open, window_close, course:courses(title)",
     )
     .order("created_at", { ascending: false });
+  if (status !== "all") query = query.eq("status", status);
 
+  const { data } = await query;
   const assessments = (data ?? []) as unknown as AssessmentRow[];
 
   return (
@@ -62,6 +77,30 @@ export default async function AssessmentsPage() {
           <Plus className="size-4" strokeWidth={2} />
           New assessment
         </Link>
+      </div>
+
+      {/* Tabs */}
+      <div className="mb-6 flex flex-wrap gap-2 border-b border-[#444748]/20 pb-3">
+        {TABS.map((t) => {
+          const active = status === t.value;
+          return (
+            <Link
+              key={t.value}
+              href={
+                t.value === "all"
+                  ? "/assessments"
+                  : { pathname: "/assessments", query: { status: t.value } }
+              }
+              className={`font-label-cosmic rounded-full px-3.5 py-1.5 text-[11px] uppercase tracking-wider transition ${
+                active
+                  ? "bg-[#292a2b] text-[#e3e2e3]"
+                  : "text-[#c4c7c8]/70 hover:text-[#e3e2e3]"
+              }`}
+            >
+              {t.label}
+            </Link>
+          );
+        })}
       </div>
 
       {assessments.length === 0 ? (
