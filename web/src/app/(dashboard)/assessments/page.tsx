@@ -1,50 +1,49 @@
 import Link from "next/link";
-import { Clock, Plus, Users } from "lucide-react";
+import { ArrowRight, ClipboardList, Plus } from "lucide-react";
 
-// NOTE: hardcoded preview data — assessments need the Phase 3 backend
-// (assessment builder + delivery) before this becomes real.
-const TABS = ["All", "Live", "Scheduled", "Drafts", "Completed"];
+import { createClient } from "@/lib/supabase/server";
 
-const assessments = [
-  {
-    code: "PHYS-201",
-    title: "Midterm: Thermodynamics",
-    status: "Live",
-    statusStyle: "bg-red-500/10 text-red-400 border-red-500/20",
-    window: "Closes in 24m",
-    students: "142 active",
-    topics: 6,
-  },
-  {
-    code: "CS-105",
-    title: "Quiz: Data Structures",
-    status: "Scheduled",
-    statusStyle: "bg-sky-500/10 text-sky-400 border-sky-500/20",
-    window: "Opens Apr 18, 9:00 AM",
-    students: "89 enrolled",
-    topics: 4,
-  },
-  {
-    code: "MATSCI-301",
-    title: "Diffusion & Phase Diagrams",
-    status: "Draft",
-    statusStyle: "bg-[#343536] text-[#c4c7c8] border-[#444748]/30",
-    window: "Not scheduled",
-    students: "—",
-    topics: 3,
-  },
-  {
-    code: "PHYS-201",
-    title: "Linear Algebra Quiz #2",
-    status: "Completed",
-    statusStyle: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    window: "Closed Apr 2",
-    students: "138 submitted",
-    topics: 5,
-  },
-];
+type AssessmentRow = {
+  id: string;
+  title: string;
+  code: string;
+  status: string;
+  window_open: string | null;
+  window_close: string | null;
+  course: { title: string } | null;
+};
 
-export default function AssessmentsPage() {
+const STATUS_STYLES: Record<string, string> = {
+  draft: "bg-[#343536] text-[#c4c7c8] border-[#444748]/30",
+  open: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  closed: "bg-red-500/10 text-red-400 border-red-500/20",
+};
+
+function windowLabel(a: AssessmentRow): string {
+  if (a.window_open || a.window_close) {
+    const fmt = (s: string | null): string =>
+      s
+        ? new Date(s).toLocaleString(undefined, {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })
+        : "—";
+    return `${fmt(a.window_open)} → ${fmt(a.window_close)}`;
+  }
+  return "Always open";
+}
+
+export default async function AssessmentsPage() {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("assessments")
+    .select(
+      "id, title, code, status, window_open, window_close, course:courses(title)",
+    )
+    .order("created_at", { ascending: false });
+
+  const assessments = (data ?? []) as unknown as AssessmentRow[];
+
   return (
     <div className="mx-auto max-w-[1200px]">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -53,7 +52,7 @@ export default function AssessmentsPage() {
             Assessments
           </h1>
           <p className="mt-2 text-[#c4c7c8]">
-            Build, schedule, and monitor adaptive assessments.
+            Each assessment has a code students enter in the exam app.
           </p>
         </div>
         <Link
@@ -65,60 +64,64 @@ export default function AssessmentsPage() {
         </Link>
       </div>
 
-      {/* Tabs */}
-      <div className="mb-6 flex flex-wrap gap-2 border-b border-[#444748]/20 pb-3">
-        {TABS.map((t, i) => (
-          <button
-            key={t}
-            className={`font-label-cosmic rounded-full px-3.5 py-1.5 text-[11px] uppercase tracking-wider transition ${
-              i === 0
-                ? "bg-[#292a2b] text-[#e3e2e3]"
-                : "text-[#c4c7c8]/70 hover:text-[#e3e2e3]"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {/* Assessment cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {assessments.map((a) => (
-          <div
-            key={a.title}
-            className="glass-panel group rounded-2xl p-6 transition-all hover:-translate-y-0.5 hover:border-white/20"
-          >
-            <div className="mb-4 flex items-start justify-between">
-              <span className="font-label-cosmic rounded-full border border-[#444748]/20 bg-[#343536] px-3 py-1 text-[10px] uppercase tracking-widest">
-                {a.code}
-              </span>
-              <span
-                className={`font-label-cosmic rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-wider ${a.statusStyle}`}
-              >
-                {a.status}
-              </span>
-            </div>
-            <h3 className="font-display text-xl">{a.title}</h3>
-            <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#444748]/10 pt-5 text-sm text-[#c4c7c8]">
-              <span className="flex items-center gap-1.5">
-                <Clock className="size-4" strokeWidth={1.5} />
-                {a.window}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Users className="size-4" strokeWidth={1.5} />
-                {a.students}
-              </span>
-              <span className="font-label-cosmic text-[11px] uppercase tracking-wider text-[#c4c7c8]/60">
-                {a.topics} topics
-              </span>
-            </div>
+      {assessments.length === 0 ? (
+        <div className="glass-panel flex flex-col items-center justify-center rounded-2xl border-dashed py-16 text-center">
+          <div className="flex size-12 items-center justify-center rounded-xl border border-[#444748]/40 bg-[#1b1c1d]">
+            <ClipboardList
+              className="size-6 text-[#c4c7c8]/60"
+              strokeWidth={1.5}
+            />
           </div>
-        ))}
-      </div>
-
-      <p className="font-label-cosmic mt-4 text-[10px] uppercase tracking-wider text-[#c4c7c8]/40">
-        Preview · sample data — assessment engine arrives in a later phase
-      </p>
+          <p className="mt-4 text-sm font-semibold text-[#e3e2e3]">
+            No assessments yet
+          </p>
+          <p className="mt-1 text-sm text-[#c4c7c8]/60">
+            Create one — you&apos;ll get a code to share with students.
+          </p>
+          <Link
+            href="/assessments/new"
+            className="active-glow mt-5 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#16181a] transition hover:opacity-90"
+          >
+            New assessment
+          </Link>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {assessments.map((a) => (
+            <Link
+              key={a.id}
+              href={`/assessments/${a.id}`}
+              className="glass-panel group rounded-2xl p-6 transition-all hover:-translate-y-0.5 hover:border-white/20"
+            >
+              <div className="mb-4 flex items-start justify-between">
+                <span className="font-label-cosmic rounded-full border border-[#444748]/20 bg-[#343536] px-3 py-1 text-[10px] uppercase tracking-widest">
+                  {a.course?.title ?? "—"}
+                </span>
+                <span
+                  className={`font-label-cosmic rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-wider ${
+                    STATUS_STYLES[a.status] ?? STATUS_STYLES.draft
+                  }`}
+                >
+                  {a.status}
+                </span>
+              </div>
+              <h3 className="font-display text-xl">{a.title}</h3>
+              <div className="mt-4 flex items-center justify-between border-t border-[#444748]/10 pt-4">
+                <span className="font-display text-lg tracking-[0.15em]">
+                  {a.code}
+                </span>
+                <ArrowRight
+                  className="size-4 text-[#c4c7c8]/40 transition-all group-hover:translate-x-1 group-hover:text-[#e3e2e3]"
+                  strokeWidth={1.5}
+                />
+              </div>
+              <p className="font-label-cosmic mt-2 text-[10px] uppercase tracking-wider text-[#c4c7c8]/50">
+                {windowLabel(a)}
+              </p>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

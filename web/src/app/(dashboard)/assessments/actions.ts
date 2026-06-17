@@ -1,6 +1,19 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/server";
+
+export async function deleteAssessment(formData: FormData) {
+  const supabase = await createClient();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const { error } = await supabase.from("assessments").delete().eq("id", id);
+  if (error) console.error("deleteAssessment failed:", error);
+  revalidatePath("/assessments");
+  redirect("/assessments");
+}
 
 export type CreateAssessmentInput = {
   courseId: string;
