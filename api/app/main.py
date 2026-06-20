@@ -6,11 +6,12 @@ from typing import Any
 from app.core.config import get_settings
 from app.core.auth import AuthenticatedUser, get_current_user
 from app.models.ingest import IngestRequest, IngestResponse
-from app.services.materials import get_owned_material, update_material_status, delete_material_chunks, insert_material_chunks_embeddings
+from app.services.materials import get_owned_material, update_material_status, delete_material_chunks, insert_material_chunks
 from app.services.material_files import download_material_file, validate_material_file_metadata, write_temp_material_file
 from app.services.parsing import extract_pdf_text
 from app.services.chunking import chunk_document_text
 from app.services.embeddings import generate_embeddings
+from app.services.retrieval import retrieve_top_chunks_for_material
 
 settings = get_settings()
 
@@ -33,11 +34,11 @@ async def ingest(request: IngestRequest, background_tasks: BackgroundTasks,
     
     update_material_status(request.material_id, "processing", None)
     
-    background_tasks.add_task(run_stub_ingestion, request.material_id, material)
+    background_tasks.add_task(run_ingestion, request.material_id, material)
     
     return IngestResponse(material_id=request.material_id, status="processing")
 
-def run_stub_ingestion(material_id: UUID, material: dict[str, Any]) -> None:
+def run_ingestion(material_id: UUID, material: dict[str, Any]) -> None:
     temp_path: Path | None = None
     
     try:
@@ -52,7 +53,7 @@ def run_stub_ingestion(material_id: UUID, material: dict[str, Any]) -> None:
         chunk_texts = [chunk.content for chunk in chunks]
         embeddings = generate_embeddings(chunk_texts)
         delete_material_chunks(material_id)
-        insert_material_chunks_embeddings(material_id, chunks, embeddings)
+        insert_material_chunks(material_id, chunks, embeddings)
         update_material_status(material_id, "done", None)
     except Exception as exc:
         update_material_status(material_id, "error", str(exc))
@@ -67,3 +68,14 @@ async def debug_me(current_user: AuthenticatedUser = Depends(get_current_user),)
         "email": current_user.email,
         "role": current_user.role
     }
+    
+@app.get("/debug/retrieve")
+async def debug_retrieve(material_id: UUID, query: str, top_k: int = 5,
+                         current_user: AuthenticatedUser = Depends(get_current_user)) -> dict[str, Any]:
+    material = get_owned_material(material_id, current_user.id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    
+    chunks = retrieve_top_chunks_for_material(material_id, query, top_k)
+    
+    return {"chunks": chunks}

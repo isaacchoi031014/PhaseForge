@@ -60,29 +60,8 @@ def delete_material_chunks(material_id: UUID) -> None:
         .eq("material_id", str(material_id))
         .execute()
     )
-
-def insert_material_chunks(material_id: UUID, chunks: list[str]) -> None:
-    if not chunks:
-        return
     
-    supabase = get_supabase_client()
-    rows: list[JSON] = [
-        {
-            "material_id": str(material_id),
-            "chunk_index": index,
-            "content": content,
-            "embedding": None
-        }
-        for index, content in enumerate(chunks)
-    ]
-    
-    _ = (
-        supabase.table("material_chunks")
-        .insert(rows)
-        .execute()
-    )
-    
-def insert_material_chunks_embeddings(material_id: UUID, chunks: list[TextChunk],
+def insert_material_chunks(material_id: UUID, chunks: list[TextChunk],
                                       embeddings: list[list[float]]) -> None:
     if len(chunks) != len(embeddings):
         raise ValueError(f"Expected {len(chunks)} embeddings, received {len(embeddings)}")
@@ -96,7 +75,7 @@ def insert_material_chunks_embeddings(material_id: UUID, chunks: list[TextChunk]
             "material_id": str(material_id),
             "chunk_index": chunk.chunk_index,
             "content": chunk.content,
-            "embedding": cast(JSON, embedding) # format_pgvector(embedding)
+            "embedding": cast(JSON, embedding)
         }
         for chunk, embedding in zip(chunks, embeddings, strict=True)
     ]

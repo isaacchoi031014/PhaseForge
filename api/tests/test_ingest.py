@@ -109,12 +109,12 @@ def test_owned_material_returns_202(
     ) -> None:
         return None
 
-    def fake_run_stub_ingestion(material_id: UUID, material: dict[str, Any]) -> None:
+    def fake_run_ingestion(material_id: UUID, material: dict[str, Any]) -> None:
         background_materials.append(material_id)
 
     monkeypatch.setattr("app.main.get_owned_material", fake_get_owned_material)
     monkeypatch.setattr("app.main.update_material_status", fake_update_material_status)
-    monkeypatch.setattr("app.main.run_stub_ingestion", fake_run_stub_ingestion)
+    monkeypatch.setattr("app.main.run_ingestion", fake_run_ingestion)
 
     response = post_ingest(client, str(material_id))
 
@@ -150,12 +150,12 @@ def test_owned_material_updates_status_to_processing(
     ) -> None:
         status_updates.append((material_id, status, error_message))
 
-    def fake_run_stub_ingestion(material_id: UUID, material: dict[str, Any]) -> None:
+    def fake_run_ingestion(material_id: UUID, material: dict[str, Any]) -> None:
         return None
 
     monkeypatch.setattr("app.main.get_owned_material", fake_get_owned_material)
     monkeypatch.setattr("app.main.update_material_status", fake_update_material_status)
-    monkeypatch.setattr("app.main.run_stub_ingestion", fake_run_stub_ingestion)
+    monkeypatch.setattr("app.main.run_ingestion", fake_run_ingestion)
 
     response = post_ingest(client, str(material_id))
 
@@ -163,7 +163,7 @@ def test_owned_material_updates_status_to_processing(
     assert status_updates == [(material_id, "processing", None)]
 
 
-def test_stub_ingestion_marks_done_after_success(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ingestion_marks_done_after_success(monkeypatch: pytest.MonkeyPatch) -> None:
     material_id = uuid4()
     material = {
         "id": str(material_id),
@@ -202,7 +202,7 @@ def test_stub_ingestion_marks_done_after_success(monkeypatch: pytest.MonkeyPatch
         assert texts == ["[Page 1]\nChunk one", "[Page 1]\nChunk two"]
         return [[0.1, 0.2], [0.3, 0.4]]
 
-    def fake_insert_material_chunks_embeddings(
+    def fake_insert_material_chunks(
         material_id: UUID,
         chunks: list[TextChunk],
         embeddings: list[list[float]],
@@ -212,7 +212,7 @@ def test_stub_ingestion_marks_done_after_success(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr("app.main.delete_material_chunks", fake_delete_material_chunks)
     monkeypatch.setattr("app.main.generate_embeddings", fake_generate_embeddings)
-    monkeypatch.setattr("app.main.insert_material_chunks_embeddings", fake_insert_material_chunks_embeddings)
+    monkeypatch.setattr("app.main.insert_material_chunks", fake_insert_material_chunks)
 
     def fake_update_material_status(
         material_id: UUID,
@@ -223,9 +223,9 @@ def test_stub_ingestion_marks_done_after_success(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr("app.main.update_material_status", fake_update_material_status)
 
-    from app.main import run_stub_ingestion
+    from app.main import run_ingestion
 
-    run_stub_ingestion(material_id, material)
+    run_ingestion(material_id, material)
 
     assert chunk_calls == [
         ("delete", material_id),
@@ -241,7 +241,7 @@ def test_stub_ingestion_marks_done_after_success(monkeypatch: pytest.MonkeyPatch
     assert status_updates == [(material_id, "done", None)]
 
 
-def test_stub_ingestion_marks_error_after_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ingestion_marks_error_after_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     material_id = uuid4()
     material = {
         "id": str(material_id),
@@ -267,14 +267,14 @@ def test_stub_ingestion_marks_error_after_failure(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr("app.main.download_material_file", fake_download_material_file)
     monkeypatch.setattr("app.main.update_material_status", fake_update_material_status)
 
-    from app.main import run_stub_ingestion
+    from app.main import run_ingestion
 
-    run_stub_ingestion(material_id, material)
+    run_ingestion(material_id, material)
 
     assert status_updates == [(material_id, "error", "storage download failed")]
 
 
-def test_stub_ingestion_removes_temp_file(
+def test_ingestion_removes_temp_file(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -310,19 +310,19 @@ def test_stub_ingestion_removes_temp_file(
     monkeypatch.setattr("app.main.generate_embeddings", lambda texts: [[0.1, 0.2]])
     monkeypatch.setattr("app.main.delete_material_chunks", lambda material_id: None)
     monkeypatch.setattr(
-        "app.main.insert_material_chunks_embeddings",
+        "app.main.insert_material_chunks",
         lambda material_id, chunks, embeddings: None,
     )
     monkeypatch.setattr("app.main.update_material_status", lambda *args, **kwargs: None)
 
-    from app.main import run_stub_ingestion
+    from app.main import run_ingestion
 
-    run_stub_ingestion(material_id, material)
+    run_ingestion(material_id, material)
 
     assert not temp_file.exists()
 
 
-def test_stub_ingestion_marks_error_after_chunking_failure(
+def test_ingestion_marks_error_after_chunking_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     material_id = uuid4()
@@ -361,14 +361,14 @@ def test_stub_ingestion_marks_error_after_chunking_failure(
     monkeypatch.setattr("app.main.chunk_document_text", fake_chunk_document_text)
     monkeypatch.setattr("app.main.update_material_status", fake_update_material_status)
 
-    from app.main import run_stub_ingestion
+    from app.main import run_ingestion
 
-    run_stub_ingestion(material_id, material)
+    run_ingestion(material_id, material)
 
     assert status_updates == [(material_id, "error", "chunking failed")]
 
 
-def test_stub_ingestion_marks_error_after_embedding_failure(
+def test_ingestion_marks_error_after_embedding_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     material_id = uuid4()
@@ -413,8 +413,8 @@ def test_stub_ingestion_marks_error_after_embedding_failure(
     monkeypatch.setattr("app.main.generate_embeddings", fake_generate_embeddings)
     monkeypatch.setattr("app.main.update_material_status", fake_update_material_status)
 
-    from app.main import run_stub_ingestion
+    from app.main import run_ingestion
 
-    run_stub_ingestion(material_id, material)
+    run_ingestion(material_id, material)
 
     assert status_updates == [(material_id, "error", "embedding failed")]

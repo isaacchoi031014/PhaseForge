@@ -5,18 +5,18 @@ from uuid import uuid4
 import pytest
 
 from app.services.chunking import TextChunk
-from app.services.materials import insert_material_chunks_embeddings
+from app.services.materials import insert_material_chunks
 
 
-def test_insert_material_chunks_embeddings_rejects_length_mismatch() -> None:
+def test_insert_material_chunks_rejects_length_mismatch() -> None:
     material_id = uuid4()
     chunks = [TextChunk(chunk_index=0, content="Chunk", page_start=1, page_end=1)]
 
     with pytest.raises(ValueError, match="Expected 1 embeddings, received 0"):
-        insert_material_chunks_embeddings(material_id, chunks, [])
+        insert_material_chunks(material_id, chunks, [])
 
 
-def test_insert_material_chunks_embeddings_skips_empty_chunks(
+def test_insert_material_chunks_skips_empty_chunks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fail_get_supabase_client() -> None:
@@ -24,10 +24,10 @@ def test_insert_material_chunks_embeddings_skips_empty_chunks(
 
     monkeypatch.setattr("app.services.materials.get_supabase_client", fail_get_supabase_client)
 
-    insert_material_chunks_embeddings(uuid4(), [], [])
+    insert_material_chunks(uuid4(), [], [])
 
 
-def test_insert_material_chunks_embeddings_inserts_rows_with_embeddings(
+def test_insert_material_chunks_inserts_rows_with_embeddings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     material_id = uuid4()
@@ -54,7 +54,7 @@ def test_insert_material_chunks_embeddings_inserts_rows_with_embeddings(
     ]
     embeddings = [[0.1, 0.2], [0.3, 0.4]]
 
-    insert_material_chunks_embeddings(material_id, chunks, embeddings)
+    insert_material_chunks(material_id, chunks, embeddings)
 
     assert inserted_rows == [
         [
