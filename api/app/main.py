@@ -12,6 +12,10 @@ from app.services.parsing import extract_pdf_text
 from app.services.chunking import chunk_document_text
 from app.services.embeddings import generate_embeddings
 from app.services.retrieval import retrieve_top_chunks_for_material
+from app.models.generation import GenerateRequest, GenerateResponse
+from app.services.questions import get_owned_course, insert_questions
+from app.services.course_retrieval import retrieve_course_context
+from app.services.generation import generate_questions
 
 settings = get_settings()
 
@@ -60,6 +64,29 @@ def run_ingestion(material_id: UUID, material: dict[str, Any]) -> None:
     finally:
         if temp_path and temp_path.exists():
             temp_path.unlink()
+
+@app.post("/generate", response_model=GenerateResponse)
+async def generate(request: GenerateRequest,
+                   current_user: AuthenticatedUser = Depends(get_current_user)) -> GenerateResponse:
+    course = get_owned_course(request.course_id, current_user.id)
+
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    chunks = retrieve_course_context(request.course_id, request.topics)
+
+    if not chunks:
+        raise HTTPException(status_code=400, detail="No processed material found for this course")
+
+    try:
+        question_set = generate_questions(request, chunks)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Question generation failed: {exc}")
+
+    source_chunk_ids = [str(chunk["id"]) for chunk in chunks]
+    rows = insert_questions(request.course_id, request.assessment_id, question_set, source_chunk_ids)
+
+    return GenerateResponse(course_id=request.course_id, count=len(rows), questions=rows)
 
 @app.get("/debug/me")
 async def debug_me(current_user: AuthenticatedUser = Depends(get_current_user),) -> dict[str, str | None]:

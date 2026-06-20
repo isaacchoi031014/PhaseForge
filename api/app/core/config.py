@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     embedding_dimension: int = Field(default=1536, validation_alias="EMBEDDING_DIMENSION")
     embedding_batch_size: int = Field(default=64, validation_alias="EMBEDDING_BATCH_SIZE")
     embedding_max_retries: int = Field(default=3, validation_alias="EMBEDDING_MAX_RETRIES")
+    anthropic_api_key: str = Field(validation_alias="ANTHROPIC_API_KEY")
+    generation_model: str = Field(default="claude-sonnet-4-6", validation_alias="GENERATION_MODEL")
+    generation_max_tokens: int = Field(default=16000, validation_alias="GENERATION_MAX_TOKENS")
+    generation_retrieval_k: int = Field(default=6, validation_alias="GENERATION_RETRIEVAL_K")
 
 @lru_cache
 def get_settings() -> Settings:
