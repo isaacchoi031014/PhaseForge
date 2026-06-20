@@ -8,16 +8,19 @@ SYSTEM_PROMPT = (
     "You are an expert exam author for university instructors. You write ORIGINAL, "
     "exam-ready questions grounded strictly in the provided course material, each with "
     "a complete answer key.\n"
+    "These questions form a POOL for an adaptive exam, so spread them evenly across the "
+    "requested difficulty bands and label each question's band accurately — the exam "
+    "engine picks questions by difficulty at runtime based on the student's performance.\n"
     "Rules:\n"
     "- Ground every question in the supplied material. Do not invent facts beyond it, "
     "and do not copy any past-exam text verbatim — produce fresh questions.\n"
-    "- Honor the requested question types, difficulty, and topics. If multiple types are "
-    "requested, spread questions across them.\n"
+    "- Honor the requested question types and topics, and spread questions across the "
+    "requested types and difficulty bands.\n"
     "- For mcq: put 3-5 plausible choices in `options`, set `answer` to the exact text of "
     "the correct choice, give a one-paragraph `explanation`, and leave `rubric` empty.\n"
-    "- For short_answer / essay: leave `options` empty, put a model answer in `answer`, "
+    "- For short_answer: leave `options` empty, put a concise model answer in `answer`, "
     "and list concrete grading criteria in `rubric`.\n"
-    "- Set `topic` and `difficulty` on every question."
+    "- Set `topic` on every question, and set `difficulty` to one of the requested bands."
 )
 
 @lru_cache
@@ -34,10 +37,11 @@ def build_context(chunks: list[dict[str, Any]]) -> str:
 def build_user_prompt(request: GenerateRequest, context: str) -> str:
     topics = ", ".join(request.topics) if request.topics else "any salient topics in the material"
     types = ", ".join(request.types)
+    difficulties = ", ".join(request.difficulties) if request.difficulties else "Medium"
     parts = [
-        f"Generate {request.num_questions} exam questions.",
+        f"Generate a question pool of {request.num_questions} exam questions.",
         f"Question types to use: {types}.",
-        f"Difficulty: {request.difficulty}.",
+        f"Difficulty bands to cover (spread questions evenly across these): {difficulties}.",
         f"Topics to cover: {topics}.",
     ]
     if request.instructions:
