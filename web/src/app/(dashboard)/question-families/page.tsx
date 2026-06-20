@@ -40,11 +40,12 @@ export default async function QuestionFamiliesPage() {
 
       <div className="mb-8">
         <h1 className="font-display text-[32px] leading-tight tracking-tight">
-          Generate Question Families
+          Generate Question Pool
         </h1>
         <p className="mt-2 text-[#c4c7c8]">
-          Turn course materials into reusable, parameterized question
-          families — each produces multiple equivalent variants.
+          Turn course materials into a pool of auto-graded questions across
+          difficulty bands. The exam adapts difficulty to each student at run
+          time.
         </p>
       </div>
 

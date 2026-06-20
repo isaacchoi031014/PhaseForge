@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from uuid import UUID
 from time import sleep
 from pathlib import Path
@@ -20,6 +21,14 @@ from app.services.generation import generate_questions
 settings = get_settings()
 
 app = FastAPI(title="PhaseForge API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/health")
 async def health_check() -> dict[str, str]:

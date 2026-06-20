@@ -9,6 +9,7 @@ class Settings(BaseSettings):
         extra="ignore"
     )
     environment: str = Field(default="local", validation_alias="ENVIRONMENT")
+    cors_origins: str = Field(default="http://localhost:3000,http://127.0.0.1:3000", validation_alias="CORS_ORIGINS")
     supabase_url: AnyHttpUrl = Field(validation_alias="SUPABASE_URL")
     supabase_publishable_key: str = Field(validation_alias="SUPABASE_PUBLISHABLE_KEY")
     supabase_secret_key: str = Field(validation_alias="SUPABASE_SECRET_KEY")

@@ -6,9 +6,12 @@ QuestionType = Literal["mcq", "short_answer", "essay"]
 
 class GenerateRequest(BaseModel):
     course_id: UUID
-    num_questions: int = Field(default=10, ge=1, le=50)
-    types: list[QuestionType] = Field(default_factory=lambda: ["mcq"])
-    difficulty: str = "medium"
+    num_questions: int = Field(default=12, ge=1, le=50)
+    # Auto-gradable types only — an adaptive exam branches on instant scoring.
+    types: list[QuestionType] = Field(default_factory=lambda: ["mcq", "short_answer"])
+    # Bands to stock the question pool with; generation spreads across them and
+    # tags each question, so the exam engine can pick by difficulty at runtime.
+    difficulties: list[str] = Field(default_factory=lambda: ["Easy", "Medium", "Hard"])
     topics: list[str] = Field(default_factory=list)
     instructions: str | None = None
     assessment_id: UUID | None = None
