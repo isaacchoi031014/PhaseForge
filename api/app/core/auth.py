@@ -35,7 +35,8 @@ def decode_supabase_jwt(token: str) -> dict:
         signing_key.key,
         algorithms=["ES256", "RS256"],
         issuer=str(settings.supabase_issuer),
-        options={"require": ["exp", "sub", "iss"]}
+        audience="authenticated",
+        options={"require": ["exp", "sub", "iss", "aud"]}
     )
     
 def user_from_claims(claims: dict) -> AuthenticatedUser:
