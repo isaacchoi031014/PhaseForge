@@ -50,6 +50,7 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
   const [title, setTitle] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [counts, setCounts] = useState<Record<string, BandCounts>>({});
+  const [perStudent, setPerStudent] = useState<Record<string, number>>({});
   const [opensAt, setOpensAt] = useState("");
   const [closesAt, setClosesAt] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -71,11 +72,28 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
   const totalHard = bandTotal("hard");
   const total = totalEasy + totalMedium + totalHard;
 
+  const poolFor = (id: string) => {
+    const c = counts[id] ?? EMPTY_COUNTS;
+    return c.easy + c.medium + c.hard;
+  };
+  const perStudentTotal = selectedTopics.reduce(
+    (sum, t) => sum + (perStudent[t.id] ?? 0),
+    0,
+  );
+  // A topic where the student is asked more questions than the pool holds.
+  const overAllocated = selectedTopics.some(
+    (t) => (perStudent[t.id] ?? 0) > poolFor(t.id),
+  );
+
   function setCount(id: string, band: keyof BandCounts, value: number) {
     setCounts((prev) => ({
       ...prev,
       [id]: { ...(prev[id] ?? EMPTY_COUNTS), [band]: Math.max(0, value || 0) },
     }));
+  }
+
+  function setPerStudentCount(id: string, value: number) {
+    setPerStudent((prev) => ({ ...prev, [id]: Math.max(0, value || 0) }));
   }
 
   async function submit() {
@@ -84,7 +102,15 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
       return;
     }
     if (total === 0) {
-      setError("Set at least one question count above zero.");
+      setError("Set at least one pool question above zero.");
+      return;
+    }
+    if (perStudentTotal === 0) {
+      setError("Set how many questions each student answers (per topic).");
+      return;
+    }
+    if (overAllocated) {
+      setError("A topic asks students more questions than its pool holds — lower it or grow the pool.");
       return;
     }
     setCreating(true);
@@ -93,8 +119,12 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
       courseId,
       title,
       topicIds: [...selected],
-      questions: total,
-      difficulty: { easy: totalEasy, medium: totalMedium, hard: totalHard },
+      questions: perStudentTotal,
+      perStudent: selectedTopics.map((t) => ({
+        id: t.id,
+        name: t.name,
+        count: perStudent[t.id] ?? 0,
+      })),
       opensAt: opensAt || null,
       closesAt: closesAt || null,
       instructions,
@@ -167,6 +197,7 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
     setCourseId(id);
     setSelected(new Set()); // topics belong to a course — reset on switch
     setCounts({});
+    setPerStudent({});
   }
 
   function toggleTopic(id: string) {
@@ -176,9 +207,10 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
       else next.add(id);
       return next;
     });
-    // Seed a sensible default when a topic is added; keep it when toggled off
+    // Seed sensible defaults when a topic is added; keep them when toggled off
     // so re-selecting restores the prior counts.
     setCounts((prev) => (prev[id] ? prev : { ...prev, [id]: { ...DEFAULT_COUNTS } }));
+    setPerStudent((prev) => (prev[id] != null ? prev : { ...prev, [id]: 2 }));
   }
 
   if (courses.length === 0) {
@@ -340,7 +372,7 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
       {/* Questions per topic */}
       <Section
         title="Questions per topic"
-        desc="Set how many Easy / Medium / Hard questions to generate for each selected topic."
+        desc="Pool = questions generated into the bank. Per student = how many of that topic each student answers (difficulty is chosen adaptively). Keep the pool larger than per-student for variety."
       >
         {selectedTopics.length === 0 ? (
           <p className="text-sm text-[#c4c7c8]/60">
@@ -350,13 +382,35 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
           <div className="flex flex-col gap-3">
             {selectedTopics.map((t) => {
               const c = counts[t.id] ?? EMPTY_COUNTS;
+              const ps = perStudent[t.id] ?? 0;
+              const over = ps > poolFor(t.id);
               return (
                 <div
                   key={t.id}
-                  className="flex flex-col gap-3 rounded-xl border border-[#444748]/30 bg-[#1b1c1d] p-4 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-3 rounded-xl border border-[#444748]/30 bg-[#1b1c1d] p-4"
                 >
-                  <span className="text-sm text-[#e3e2e3]">{t.name}</span>
-                  <div className="flex gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[#e3e2e3]">{t.name}</span>
+                    <label className="flex items-center gap-1.5">
+                      <span className="font-label-cosmic text-[10px] uppercase tracking-widest text-[#c4c7c8]/60">
+                        Per student
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={50}
+                        value={ps}
+                        onChange={(e) => setPerStudentCount(t.id, Number(e.target.value))}
+                        className={`w-14 rounded-lg border bg-[#16181a] px-2 py-1.5 text-center text-sm text-[#e3e2e3] outline-none transition focus:border-white/40 ${
+                          over ? "border-red-500/50" : "border-[#444748]/40"
+                        }`}
+                      />
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="font-label-cosmic text-[10px] uppercase tracking-widest text-[#c4c7c8]/40">
+                      Pool
+                    </span>
                     {(
                       [
                         ["easy", "Easy"],
@@ -378,6 +432,11 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
                         />
                       </label>
                     ))}
+                    {over && (
+                      <span className="text-xs text-red-400">
+                        asks {ps} but pool has {poolFor(t.id)}
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -387,8 +446,7 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
                 Total
               </span>
               <span className="font-display text-sm">
-                {total} question{total === 1 ? "" : "s"} · {totalEasy} E / {totalMedium} M /{" "}
-                {totalHard} H
+                Pool {total} · {perStudentTotal} per student
               </span>
             </div>
           </div>

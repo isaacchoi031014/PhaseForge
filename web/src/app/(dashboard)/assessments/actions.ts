@@ -66,8 +66,8 @@ export type CreateAssessmentInput = {
   courseId: string;
   title: string;
   topicIds: string[];
-  questions: number;
-  difficulty: { easy: number; medium: number; hard: number };
+  questions: number; // total questions each student answers (sum of perStudent)
+  perStudent: { id: string; name: string; count: number }[];
   opensAt: string | null;
   closesAt: string | null;
   instructions: string;
@@ -111,11 +111,11 @@ export async function createAssessment(
   }
 
   const config = {
-    questions: input.questions,
+    questions: input.questions, // total per student
     minutes: 60,
     topics: topicNames,
     topicIds: input.topicIds,
-    difficulty: input.difficulty,
+    perStudent: input.perStudent, // [{ id, name, count }] — questions per topic, per student
     instructions: input.instructions.trim(),
   };
 
