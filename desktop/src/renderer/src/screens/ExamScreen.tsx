@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { SAMPLE_QUESTION, type Assessment, type Student } from '../mock'
+import { useEffect, useState } from 'react'
+import { type Assessment, type Student } from '../mock'
+import { fetchExamQuestions, type ExamQuestion } from '../supabase'
 import { WorkCapture } from './WorkCapture'
 import { useLockdown } from '../lockdown'
 
@@ -14,18 +15,41 @@ export function ExamScreen({
   student: Student
   onExit: () => void
 }): React.JSX.Element {
-  const q = SAMPLE_QUESTION
   const { focusLost, violations } = useLockdown()
+  const [question, setQuestion] = useState<ExamQuestion | null>(null)
+  const [loadingQ, setLoadingQ] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [answer, setAnswer] = useState('')
   const [captured, setCaptured] = useState(false)
   const [showExit, setShowExit] = useState(false)
   const [pin, setPin] = useState('')
   const [pinError, setPinError] = useState(false)
 
+  // Pull one real, materials-grounded question for this assessment's course.
+  useEffect(() => {
+    let active = true
+    fetchExamQuestions(assessment.id, 1)
+      .then((qs) => {
+        if (!active) return
+        setQuestion(qs[0] ?? null)
+      })
+      .catch(() => {
+        if (active) setLoadError('Could not load the question. Check the connection.')
+      })
+      .finally(() => {
+        if (active) setLoadingQ(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [assessment.id])
+
   function tryExit(): void {
     if (pin === PROCTOR_PIN) onExit()
     else setPinError(true)
   }
+
+  const isMcq = question?.type === 'mcq' && question.options.length > 0
 
   return (
     <div className="relative flex h-full flex-col bg-[#060607] text-[#e3e2e3]">
@@ -39,13 +63,13 @@ export function ExamScreen({
           <div className="leading-tight">
             <div className="text-sm font-semibold">{assessment.course}</div>
             <div className="text-[11px] uppercase tracking-widest text-[#c4c7c8]/60">
-              {q.topic} · {q.difficulty}
+              {question ? `${question.topic} · ${question.difficulty}` : assessment.title}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-6">
           <span className="text-sm text-[#c4c7c8]">
-            Question <span className="font-semibold text-[#e3e2e3]">{q.index}</span> of {q.total}
+            Question <span className="font-semibold text-[#e3e2e3]">1</span> of 1
           </span>
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#1b1c1d] px-4 py-1.5">
             <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
@@ -59,7 +83,7 @@ export function ExamScreen({
 
       {/* Progress */}
       <div className="h-0.5 w-full bg-white/5">
-        <div className="h-full bg-white/80" style={{ width: `${(q.index / q.total) * 100}%` }} />
+        <div className="h-full bg-white/80" style={{ width: '100%' }} />
       </div>
 
       {/* Focus-loss notice */}
@@ -76,24 +100,60 @@ export function ExamScreen({
         <section className="flex flex-col gap-6 overflow-y-auto">
           <div className="glass-panel rounded-2xl p-7">
             <div className="mb-4 text-[11px] uppercase tracking-widest text-[#c4c7c8]/50">
-              Problem {q.index}
+              Problem 1
             </div>
-            <p className="text-lg leading-relaxed">{q.prompt}</p>
+            {loadingQ ? (
+              <p className="text-sm text-[#c4c7c8]/60">Loading question…</p>
+            ) : loadError ? (
+              <p className="text-sm text-red-400">{loadError}</p>
+            ) : !question ? (
+              <p className="text-sm text-[#c4c7c8]/60">
+                No questions have been generated for this course yet. Ask your
+                instructor to generate a question pool.
+              </p>
+            ) : (
+              <>
+                <p className="text-lg leading-relaxed">{question.prompt}</p>
+                {isMcq && (
+                  <ul className="mt-5 flex flex-col gap-2">
+                    {question.options.map((opt, i) => {
+                      const chosen = answer === opt
+                      return (
+                        <li key={i}>
+                          <button
+                            onClick={() => setAnswer(opt)}
+                            className={`w-full select-text rounded-xl border px-4 py-3 text-left text-sm transition ${
+                              chosen
+                                ? 'border-white/40 bg-white text-[#16181a]'
+                                : 'border-white/10 bg-[#1b1c1d] text-[#e3e2e3] hover:border-white/30'
+                            }`}
+                          >
+                            {String.fromCharCode(65 + i)}. {opt}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </>
+            )}
           </div>
-          <div>
-            <label className="mb-2 block text-[11px] uppercase tracking-widest text-[#c4c7c8]/60">
-              Your final answer
-            </label>
-            <input
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              placeholder="e.g. 2447 J/K"
-              className="w-full select-text rounded-xl border border-white/10 bg-[#1b1c1d] px-5 py-4 text-lg outline-none transition focus:border-white/40"
-            />
-            <p className="mt-2 text-xs text-[#c4c7c8]/50">
-              Enter your final answer with units. Submit your handwritten work on the right.
-            </p>
-          </div>
+          {question && !isMcq && (
+            <div>
+              <label className="mb-2 block text-[11px] uppercase tracking-widest text-[#c4c7c8]/60">
+                Your final answer
+              </label>
+              <input
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="Type your answer"
+                className="w-full select-text rounded-xl border border-white/10 bg-[#1b1c1d] px-5 py-4 text-lg outline-none transition focus:border-white/40"
+              />
+              <p className="mt-2 text-xs text-[#c4c7c8]/50">
+                Enter your final answer. Submit your handwritten work on the right.
+              </p>
+            </div>
+          )}
         </section>
 
         <section className="flex flex-col">

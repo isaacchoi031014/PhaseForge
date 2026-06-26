@@ -26,3 +26,25 @@ export async function validateCode(code: string): Promise<ValidatedAssessment | 
   const row = (data as ValidatedAssessment[] | null)?.[0]
   return row ?? null
 }
+
+export type ExamQuestion = {
+  id: string
+  type: 'mcq' | 'short_answer' | 'essay'
+  topic: string
+  difficulty: string
+  prompt: string
+  options: string[]
+}
+
+/** Generated questions (no answer key) for an open assessment's course. */
+export async function fetchExamQuestions(
+  assessmentId: string,
+  limit = 1
+): Promise<ExamQuestion[]> {
+  const { data, error } = await supabase.rpc('exam_questions_for_assessment', {
+    p_assessment_id: assessmentId,
+    p_limit: limit
+  })
+  if (error) throw error
+  return (data as ExamQuestion[] | null) ?? []
+}

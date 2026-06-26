@@ -1,16 +1,21 @@
 import { useState } from 'react'
 import { type Assessment, type Student } from './mock'
+import { HomeScreen } from './screens/HomeScreen'
 import { CodeScreen } from './screens/CodeScreen'
 import { IdentifyScreen } from './screens/IdentifyScreen'
 import { ConsentScreen } from './screens/ConsentScreen'
 import { ExamScreen } from './screens/ExamScreen'
 
-type Step = 'code' | 'identify' | 'consent' | 'exam'
+type Step = 'home' | 'code' | 'identify' | 'consent' | 'exam'
 
 function App(): React.JSX.Element {
-  const [step, setStep] = useState<Step>('code')
+  const [step, setStep] = useState<Step>('home')
   const [assessment, setAssessment] = useState<Assessment | null>(null)
   const [student, setStudent] = useState<Student | null>(null)
+
+  if (step === 'home') {
+    return <HomeScreen onStart={() => setStep('code')} />
+  }
 
   if (step === 'code') {
     return (
@@ -58,7 +63,7 @@ function App(): React.JSX.Element {
           await window.api?.lockdown?.disengage()
           setStudent(null)
           setAssessment(null)
-          setStep('code')
+          setStep('home')
         }}
       />
     )
