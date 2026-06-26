@@ -4,7 +4,7 @@
 
 ### Turn your course material into original, exam-ready questions — with answer keys.
 
-<img src="https://github.com/user-attachments/assets/149b7310-ac06-4a8c-af16-ca675e818609" alt="PhaseForge" width="820" />
+<img width="678" height="205" alt="Screenshot 2026-06-26 at 4 59 31 PM" src="https://github.com/user-attachments/assets/d74c1ff3-4d08-47cb-90b9-15f5fa591cdc" />
 
 <br/>
 
