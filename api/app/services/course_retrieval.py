@@ -32,6 +32,10 @@ def retrieve_course_context(course_id: UUID, topics: list[str]) -> list[dict[str
             .execute()
         )
         for row in cast(list[dict[str, Any]], response.data or []):
+            # Drop off-topic chunks so unrelated material can't ground generation.
+            distance = row.get("distance")
+            if distance is not None and distance > settings.generation_max_distance:
+                continue
             chunks_by_id[str(row["id"])] = row
 
     return list(chunks_by_id.values())

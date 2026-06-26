@@ -13,10 +13,22 @@ from app.services.parsing import extract_pdf_text
 from app.services.chunking import chunk_document_text
 from app.services.embeddings import generate_embeddings
 from app.services.retrieval import retrieve_top_chunks_for_material
-from app.models.generation import GenerateRequest, GenerateResponse
-from app.services.questions import get_owned_course, insert_questions
+from app.models.generation import (
+    ApplyQuestionRequest,
+    GenerateRequest,
+    GenerateResponse,
+    QuestionDraft,
+    RegenerateRequest,
+)
+from app.services.questions import (
+    get_owned_course,
+    get_owned_question,
+    insert_questions,
+    to_contract_question,
+    update_question_content,
+)
 from app.services.course_retrieval import retrieve_course_context
-from app.services.generation import generate_questions
+from app.services.generation import generate_questions, regenerate_one
 
 settings = get_settings()
 
@@ -74,18 +86,27 @@ def run_ingestion(material_id: UUID, material: dict[str, Any]) -> None:
         if temp_path and temp_path.exists():
             temp_path.unlink()
 
+# Sync (def) on purpose: the body does blocking I/O (OpenAI, Claude, Supabase).
+# FastAPI runs sync path ops in a threadpool, so this won't block the event loop.
 @app.post("/generate", response_model=GenerateResponse)
-async def generate(request: GenerateRequest,
-                   current_user: AuthenticatedUser = Depends(get_current_user)) -> GenerateResponse:
+def generate(request: GenerateRequest,
+             current_user: AuthenticatedUser = Depends(get_current_user)) -> GenerateResponse:
     course = get_owned_course(request.course_id, current_user.id)
 
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    chunks = retrieve_course_context(request.course_id, request.topics)
+    if request.total_questions == 0:
+        raise HTTPException(status_code=400, detail="Set at least one question count above zero.")
+
+    topics = [plan.name for plan in request.plans if plan.total > 0]
+    chunks = retrieve_course_context(request.course_id, topics)
 
     if not chunks:
-        raise HTTPException(status_code=400, detail="No processed material found for this course")
+        raise HTTPException(
+            status_code=400,
+            detail="No relevant material found — upload material covering these topics, or check the topic names match the content.",
+        )
 
     try:
         question_set = generate_questions(request, chunks)
@@ -93,9 +114,63 @@ async def generate(request: GenerateRequest,
         raise HTTPException(status_code=502, detail=f"Question generation failed: {exc}")
 
     source_chunk_ids = [str(chunk["id"]) for chunk in chunks]
-    rows = insert_questions(request.course_id, request.assessment_id, question_set, source_chunk_ids)
+    rows = insert_questions(
+        request.course_id, request.assessment_id, question_set, source_chunk_ids, request.plans
+    )
+    questions = [to_contract_question(row) for row in rows]
 
-    return GenerateResponse(course_id=request.course_id, count=len(rows), questions=rows)
+    return GenerateResponse(course_id=request.course_id, count=len(questions), questions=questions)
+
+# Sync (def) on purpose: blocking I/O runs in FastAPI's threadpool.
+@app.post("/regenerate")
+def regenerate(request: RegenerateRequest,
+               current_user: AuthenticatedUser = Depends(get_current_user)) -> dict[str, Any]:
+    question = get_owned_question(request.question_id, current_user.id)
+
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    chunks = retrieve_course_context(question["course_id"], [question["topic"]])
+
+    if not chunks:
+        raise HTTPException(
+            status_code=400,
+            detail="No relevant material found for this topic — cannot regenerate.",
+        )
+
+    try:
+        draft = regenerate_one(question, request.instructions, chunks)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Question regeneration failed: {exc}")
+
+    # Return a CANDIDATE without persisting — the professor compares it against the
+    # current question and accepts it via /questions/apply (or regenerates again).
+    return draft.model_dump(mode="json")
+
+
+@app.post("/questions/apply")
+def apply_question(request: ApplyQuestionRequest,
+                   current_user: AuthenticatedUser = Depends(get_current_user)) -> dict[str, Any]:
+    question = get_owned_question(request.question_id, current_user.id)
+
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    # The instructor's accepted draft may change topic/difficulty/type.
+    draft = QuestionDraft(
+        question_type=request.question_type,
+        topic=request.topic,
+        difficulty=request.difficulty,
+        prompt=request.prompt,
+        options=request.options,
+        answer=request.answer,
+        explanation=request.explanation,
+        rubric=request.rubric,
+        learning_objective=request.learning_objective,
+    )
+    row = update_question_content(question, draft)
+    return to_contract_question(row)
+
 
 @app.get("/debug/me")
 async def debug_me(current_user: AuthenticatedUser = Depends(get_current_user),) -> dict[str, str | None]:

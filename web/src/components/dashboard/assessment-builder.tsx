@@ -2,9 +2,20 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { BookOpen, Check, Copy, Sparkles } from "lucide-react";
+import { BookOpen, Check, Copy, Loader2, Sparkles } from "lucide-react";
 
 import { createAssessment } from "@/app/(dashboard)/assessments/actions";
+import { createClient } from "@/lib/supabase/client";
+import {
+  QuestionResults,
+  type GeneratedQuestion,
+} from "@/components/dashboard/question-results";
+
+const POOL_TYPES = ["mcq", "short_answer"] as const;
+
+type BandCounts = { easy: number; medium: number; hard: number };
+const EMPTY_COUNTS: BandCounts = { easy: 0, medium: 0, hard: 0 };
+const DEFAULT_COUNTS: BandCounts = { easy: 1, medium: 2, hard: 1 };
 
 type Topic = { id: string; name: string };
 type Course = { id: string; title: string; topics: Topic[] };
@@ -38,42 +49,124 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
   const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [questions, setQuestions] = useState(15);
-  const [easy, setEasy] = useState(30);
-  const [medium, setMedium] = useState(50);
-  const [hard, setHard] = useState(20);
+  const [counts, setCounts] = useState<Record<string, BandCounts>>({});
   const [opensAt, setOpensAt] = useState("");
   const [closesAt, setClosesAt] = useState("");
   const [instructions, setInstructions] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdCode, setCreatedCode] = useState<string | null>(null);
+  const [genBusy, setGenBusy] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [generated, setGenerated] = useState<GeneratedQuestion[] | null>(null);
 
   const currentCourse = courses.find((c) => c.id === courseId);
   const topics = currentCourse?.topics ?? [];
-  const total = easy + medium + hard;
+  const selectedTopics = topics.filter((t) => selected.has(t.id));
+
+  const bandTotal = (band: keyof BandCounts) =>
+    selectedTopics.reduce((sum, t) => sum + (counts[t.id]?.[band] ?? 0), 0);
+  const totalEasy = bandTotal("easy");
+  const totalMedium = bandTotal("medium");
+  const totalHard = bandTotal("hard");
+  const total = totalEasy + totalMedium + totalHard;
+
+  function setCount(id: string, band: keyof BandCounts, value: number) {
+    setCounts((prev) => ({
+      ...prev,
+      [id]: { ...(prev[id] ?? EMPTY_COUNTS), [band]: Math.max(0, value || 0) },
+    }));
+  }
 
   async function submit() {
+    if (selected.size === 0) {
+      setError("Pick at least one topic — questions are generated per topic.");
+      return;
+    }
+    if (total === 0) {
+      setError("Set at least one question count above zero.");
+      return;
+    }
     setCreating(true);
     setError(null);
     const res = await createAssessment({
       courseId,
       title,
       topicIds: [...selected],
-      questions,
-      difficulty: { easy, medium, hard },
+      questions: total,
+      difficulty: { easy: totalEasy, medium: totalMedium, hard: totalHard },
       opensAt: opensAt || null,
       closesAt: closesAt || null,
       instructions,
     });
     setCreating(false);
-    if (res.ok) setCreatedCode(res.code);
-    else setError(res.error);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    setCreatedCode(res.code);
+    // Generate the question pool for the assessment we just created.
+    void generatePool(res.id);
+  }
+
+  async function generatePool(assessmentId: string) {
+    setGenBusy(true);
+    setGenError(null);
+    setGenerated(null);
+
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) {
+      setGenError("Your session expired — please log in again.");
+      setGenBusy(false);
+      return;
+    }
+
+    const plans = selectedTopics.map((t) => ({
+      id: t.id,
+      name: t.name,
+      ...(counts[t.id] ?? EMPTY_COUNTS),
+    }));
+
+    try {
+      const apiRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          course_id: courseId,
+          assessment_id: assessmentId,
+          plans,
+          types: POOL_TYPES,
+          instructions: instructions.trim() || null,
+        }),
+      });
+      if (!apiRes.ok) {
+        const detail = await apiRes
+          .json()
+          .then((b) => b?.detail as string)
+          .catch(() => null);
+        throw new Error(detail || `Request failed (${apiRes.status})`);
+      }
+      const data = (await apiRes.json()) as { questions: GeneratedQuestion[] };
+      setGenerated(data.questions ?? []);
+    } catch (e) {
+      setGenError(
+        e instanceof Error ? e.message : "Generation failed — is the API running?",
+      );
+    } finally {
+      setGenBusy(false);
+    }
   }
 
   function changeCourse(id: string) {
     setCourseId(id);
     setSelected(new Set()); // topics belong to a course — reset on switch
+    setCounts({});
   }
 
   function toggleTopic(id: string) {
@@ -83,6 +176,9 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
       else next.add(id);
       return next;
     });
+    // Seed a sensible default when a topic is added; keep it when toggled off
+    // so re-selecting restores the prior counts.
+    setCounts((prev) => (prev[id] ? prev : { ...prev, [id]: { ...DEFAULT_COUNTS } }));
   }
 
   if (courses.length === 0) {
@@ -109,42 +205,60 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
 
   if (createdCode) {
     return (
-      <div className="glass-panel flex flex-col items-center rounded-2xl p-10 text-center">
-        <div className="flex size-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
-          <Check className="size-6" strokeWidth={2} />
+      <div className="flex flex-col gap-6">
+        <div className="glass-panel flex flex-col items-center rounded-2xl p-10 text-center">
+          <div className="flex size-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
+            <Check className="size-6" strokeWidth={2} />
+          </div>
+          <h2 className="mt-4 font-display text-2xl">Assessment created</h2>
+          <p className="mt-1 text-sm text-[#c4c7c8]/70">
+            Share this code with students. They enter it in the exam app to start.
+          </p>
+          <div className="mt-6 flex items-center gap-3 rounded-xl border border-white/10 bg-[#1b1c1d] px-6 py-4">
+            <span className="font-display text-3xl tracking-[0.15em]">{createdCode}</span>
+            <button
+              onClick={() => navigator.clipboard?.writeText(createdCode)}
+              className="rounded-lg p-2 text-[#c4c7c8] transition hover:bg-white/5 hover:text-[#e3e2e3]"
+              aria-label="Copy code"
+            >
+              <Copy className="size-4" strokeWidth={1.5} />
+            </button>
+          </div>
+          <div className="mt-8 flex gap-3">
+            <Link
+              href="/assessments"
+              className="rounded-xl border border-[#444748]/40 px-5 py-2.5 text-sm text-[#c4c7c8] transition hover:bg-[#1b1c1d] hover:text-[#e3e2e3]"
+            >
+              Done
+            </Link>
+            <button
+              disabled={genBusy}
+              onClick={() => {
+                setCreatedCode(null);
+                setGenerated(null);
+                setGenError(null);
+                setTitle("");
+                setSelected(new Set());
+              }}
+              className="active-glow rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-[#16181a] transition hover:opacity-90 disabled:opacity-50"
+            >
+              Create another
+            </button>
+          </div>
         </div>
-        <h2 className="mt-4 font-display text-2xl">Assessment created</h2>
-        <p className="mt-1 text-sm text-[#c4c7c8]/70">
-          Share this code with students. They enter it in the exam app to start.
-        </p>
-        <div className="mt-6 flex items-center gap-3 rounded-xl border border-white/10 bg-[#1b1c1d] px-6 py-4">
-          <span className="font-display text-3xl tracking-[0.15em]">{createdCode}</span>
-          <button
-            onClick={() => navigator.clipboard?.writeText(createdCode)}
-            className="rounded-lg p-2 text-[#c4c7c8] transition hover:bg-white/5 hover:text-[#e3e2e3]"
-            aria-label="Copy code"
-          >
-            <Copy className="size-4" strokeWidth={1.5} />
-          </button>
-        </div>
-        <div className="mt-8 flex gap-3">
-          <Link
-            href="/assessments"
-            className="rounded-xl border border-[#444748]/40 px-5 py-2.5 text-sm text-[#c4c7c8] transition hover:bg-[#1b1c1d] hover:text-[#e3e2e3]"
-          >
-            Done
-          </Link>
-          <button
-            onClick={() => {
-              setCreatedCode(null);
-              setTitle("");
-              setSelected(new Set());
-            }}
-            className="active-glow rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-[#16181a] transition hover:opacity-90"
-          >
-            Create another
-          </button>
-        </div>
+
+        {genBusy && (
+          <div className="glass-panel flex items-center justify-center gap-3 rounded-2xl py-10 text-sm text-[#c4c7c8]">
+            <Loader2 className="size-4 animate-spin" strokeWidth={2} />
+            Generating questions from your course materials…
+          </div>
+        )}
+        {genError && (
+          <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {genError}
+          </p>
+        )}
+        {generated && <QuestionResults questions={generated} />}
       </div>
     );
   }
@@ -223,65 +337,62 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
         )}
       </Section>
 
-      {/* Question setup */}
+      {/* Questions per topic */}
       <Section
-        title="Question setup"
-        desc="How many questions, and the difficulty mix."
+        title="Questions per topic"
+        desc="Set how many Easy / Medium / Hard questions to generate for each selected topic."
       >
-        <div className="flex flex-col gap-6">
-          <div className="max-w-[200px]">
-            <label className={labelCls}>Questions per student</label>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={questions}
-              onChange={(e) => setQuestions(Number(e.target.value))}
-              className={fieldCls}
-            />
-          </div>
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <label className={`${labelCls} mb-0`}>
-                Difficulty distribution
-              </label>
-              <span
-                className={`font-display text-sm ${
-                  total === 100 ? "text-emerald-400" : "text-amber-400"
-                }`}
-              >
-                Total {total}%
+        {selectedTopics.length === 0 ? (
+          <p className="text-sm text-[#c4c7c8]/60">
+            Select at least one topic above to set question counts.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {selectedTopics.map((t) => {
+              const c = counts[t.id] ?? EMPTY_COUNTS;
+              return (
+                <div
+                  key={t.id}
+                  className="flex flex-col gap-3 rounded-xl border border-[#444748]/30 bg-[#1b1c1d] p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <span className="text-sm text-[#e3e2e3]">{t.name}</span>
+                  <div className="flex gap-3">
+                    {(
+                      [
+                        ["easy", "Easy"],
+                        ["medium", "Medium"],
+                        ["hard", "Hard"],
+                      ] as const
+                    ).map(([band, label]) => (
+                      <label key={band} className="flex items-center gap-1.5">
+                        <span className="font-label-cosmic text-[10px] uppercase tracking-widest text-[#c4c7c8]/60">
+                          {label}
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={c[band]}
+                          onChange={(e) => setCount(t.id, band, Number(e.target.value))}
+                          className="w-14 rounded-lg border border-[#444748]/40 bg-[#16181a] px-2 py-1.5 text-center text-sm text-[#e3e2e3] outline-none transition focus:border-white/40"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-between border-t border-[#444748]/30 pt-3">
+              <span className="font-label-cosmic text-[10px] uppercase tracking-widest text-[#c4c7c8]/60">
+                Total
+              </span>
+              <span className="font-display text-sm">
+                {total} question{total === 1 ? "" : "s"} · {totalEasy} E / {totalMedium} M /{" "}
+                {totalHard} H
               </span>
             </div>
-            <div className="flex flex-col gap-4">
-              {[
-                { k: "Easy", v: easy, set: setEasy },
-                { k: "Medium", v: medium, set: setMedium },
-                { k: "Hard", v: hard, set: setHard },
-              ].map((d) => (
-                <div key={d.k}>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-sm text-[#c4c7c8]">{d.k}</span>
-                    <span className="font-display text-sm">{d.v}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={d.v}
-                    onChange={(e) => d.set(Number(e.target.value))}
-                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[#343536] accent-white"
-                  />
-                </div>
-              ))}
-            </div>
-            {total !== 100 && (
-              <p className="mt-3 text-xs text-amber-400/80">
-                Tip: difficulty percentages should add up to 100%.
-              </p>
-            )}
           </div>
-        </div>
+        )}
       </Section>
 
       {/* Window */}
@@ -344,13 +455,13 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
           className="active-glow flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-[#16181a] transition hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
         >
           <Sparkles className="size-4" strokeWidth={2} />
-          {creating ? "Creating…" : "Create assessment & code"}
+          {creating ? "Creating…" : "Create assessment & generate"}
         </button>
       </div>
 
       <p className="font-label-cosmic text-[10px] uppercase tracking-wider text-[#c4c7c8]/40">
-        A unique code is generated now; question generation runs once the Phase 2
-        backend is connected.
+        Creates the code and generates a question pool from this course&apos;s
+        materials for the selected topics.
       </p>
     </div>
   );

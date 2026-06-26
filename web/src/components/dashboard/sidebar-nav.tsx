@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FileText,
   LayoutDashboard,
+  Layers,
 } from "lucide-react";
 
 const items = [
@@ -15,6 +16,7 @@ const items = [
   { label: "Courses", href: "/courses", icon: BookOpen },
   { label: "Source Materials", href: "/materials", icon: FileText },
   { label: "Assessments", href: "/assessments", icon: ClipboardList },
+  { label: "Question Pools", href: "/question-pools", icon: Layers },
   { label: "Analytics", href: "#", icon: BarChart3 },
 ];
 

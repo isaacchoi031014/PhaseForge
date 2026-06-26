@@ -45,21 +45,26 @@ export default async function DashboardPage() {
     "Professor";
   const lastName = name.split(" ").slice(-1)[0];
 
-  const [{ count: coursesCount }, { count: topicsCount }, { data: materials }] =
-    await Promise.all([
-      supabase.from("courses").select("id", { count: "exact", head: true }),
-      supabase.from("categories").select("id", { count: "exact", head: true }),
-      supabase
-        .from("materials")
-        .select("id, filename, type, status, course:courses(title)")
-        .order("created_at", { ascending: false }),
-    ]);
+  const [
+    { count: coursesCount },
+    { count: topicsCount },
+    { count: questionsCount },
+    { data: materials },
+  ] = await Promise.all([
+    supabase.from("courses").select("id", { count: "exact", head: true }),
+    supabase.from("categories").select("id", { count: "exact", head: true }),
+    supabase.from("questions").select("id", { count: "exact", head: true }),
+    supabase
+      .from("materials")
+      .select("id, filename, type, status, course:courses(title)")
+      .order("created_at", { ascending: false }),
+  ]);
 
   const materialList = (materials ?? []) as unknown as MaterialRow[];
   const nCourses = coursesCount ?? 0;
   const nTopics = topicsCount ?? 0;
+  const nQuestions = questionsCount ?? 0;
   const nMaterials = materialList.length;
-  const nFamilies = 0; // Phase 2 — no item families yet.
 
   const statusCounts: Record<string, number> = {
     uploaded: 0,
@@ -92,14 +97,8 @@ export default async function DashboardPage() {
       href: "/courses",
     },
     {
-      label: "Generate question families",
-      hint: "Professor-aligned, reusable variants.",
-      done: nFamilies > 0,
-      href: "/question-families",
-    },
-    {
-      label: "Configure an assessment",
-      hint: "Topics, counts, difficulty, and windows.",
+      label: "Create an assessment",
+      hint: "Pick topics — questions are generated from your materials.",
       done: false,
       href: "/assessments/new",
     },
@@ -112,7 +111,7 @@ export default async function DashboardPage() {
     { label: "Active courses", value: nCourses, icon: BookOpen, sub: "Course workspace" },
     { label: "Uploaded materials", value: nMaterials, icon: FileText, sub: "Slides, notes, exams" },
     { label: "Topics", value: nTopics, icon: Layers, sub: "Review before generation" },
-    { label: "Question families", value: nFamilies, icon: Sparkles, sub: "Generated from materials" },
+    { label: "Generated questions", value: nQuestions, icon: Sparkles, sub: "Generated from materials" },
   ];
 
   const processing = [
@@ -133,7 +132,7 @@ export default async function DashboardPage() {
             Welcome back, Professor {lastName}.
           </h1>
           <p className="mt-2 text-[#c4c7c8]">
-            Set up materials, generate question families, and launch adaptive
+            Set up materials, generate questions, and launch adaptive
             assessments.
           </p>
         </div>

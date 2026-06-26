@@ -4,6 +4,7 @@ import { ChevronLeft, Trash2 } from "lucide-react";
 
 import { deleteAssessment } from "@/app/(dashboard)/assessments/actions";
 import { CopyButton } from "@/components/dashboard/copy-button";
+import { type PoolQuestion } from "@/components/dashboard/question-review-card";
 import { createClient } from "@/lib/supabase/server";
 
 type Assessment = {
@@ -56,8 +57,22 @@ export default async function AssessmentDetailPage({
   const a = data as Assessment | null;
   if (!a) notFound();
 
+  const { data: questionData } = await supabase
+    .from("questions")
+    .select(
+      "id, type, topic, difficulty, prompt, options, answer, explanation, rubric, professor_review_status",
+    )
+    .eq("assessment_id", id)
+    .order("topic", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  const questions = (questionData ?? []) as PoolQuestion[];
+  const poolCount = questions.length;
+  const approvedCount = questions.filter(
+    (q) => q.professor_review_status === "approved",
+  ).length;
+
   const cfg = a.config_json ?? {};
-  const diff = cfg.difficulty ?? { easy: 0, medium: 0, hard: 0 };
   const topics = cfg.topics ?? [];
 
   return (
@@ -103,14 +118,6 @@ export default async function AssessmentDetailPage({
         </div>
       </div>
 
-      {/* Config */}
-      <div className="glass-panel mb-5 grid grid-cols-2 gap-6 rounded-2xl p-6 sm:grid-cols-4">
-        <Stat label="Questions" value={String(cfg.questions ?? "—")} />
-        <Stat label="Easy" value={`${diff.easy}%`} />
-        <Stat label="Medium" value={`${diff.medium}%`} />
-        <Stat label="Hard" value={`${diff.hard}%`} />
-      </div>
-
       <div className="glass-panel mb-5 rounded-2xl p-6">
         <div className="font-label-cosmic mb-3 text-[10px] uppercase tracking-widest text-[#c4c7c8]/60">
           Window
@@ -153,6 +160,24 @@ export default async function AssessmentDetailPage({
         </div>
       )}
 
+      {/* Pool lives in Question Pools now */}
+      <div className="glass-panel mb-5 flex items-center justify-between rounded-2xl p-6">
+        <div>
+          <div className="font-label-cosmic mb-1 text-[10px] uppercase tracking-widest text-[#c4c7c8]/60">
+            Question pool
+          </div>
+          <p className="text-sm text-[#c4c7c8]">
+            {poolCount} question{poolCount === 1 ? "" : "s"} · {approvedCount} approved
+          </p>
+        </div>
+        <Link
+          href="/question-pools"
+          className="rounded-xl border border-[#444748]/40 px-4 py-2 text-sm text-[#e3e2e3] transition hover:bg-[#1b1c1d]"
+        >
+          Review in Question Pools
+        </Link>
+      </div>
+
       <form action={deleteAssessment} className="flex justify-end pt-2">
         <input type="hidden" name="id" value={a.id} />
         <button
@@ -163,17 +188,6 @@ export default async function AssessmentDetailPage({
           Delete assessment
         </button>
       </form>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="font-display text-2xl">{value}</div>
-      <div className="font-label-cosmic mt-1 text-[10px] uppercase tracking-widest text-[#c4c7c8]/60">
-        {label}
-      </div>
     </div>
   );
 }

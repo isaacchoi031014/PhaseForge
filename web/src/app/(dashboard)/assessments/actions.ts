@@ -5,6 +5,53 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 
+export async function setQuestionStatus(input: {
+  id: string;
+  status: "approved" | "rejected" | "draft";
+  path?: string;
+}): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("questions")
+    .update({ professor_review_status: input.status })
+    .eq("id", input.id);
+  if (error) {
+    console.error("setQuestionStatus failed:", error);
+    return { ok: false };
+  }
+  if (input.path) revalidatePath(input.path);
+  return { ok: true };
+}
+
+export async function deleteQuestion(input: {
+  id: string;
+  path?: string;
+}): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("questions").delete().eq("id", input.id);
+  if (error) {
+    console.error("deleteQuestion failed:", error);
+    return { ok: false };
+  }
+  if (input.path) revalidatePath(input.path);
+  return { ok: true };
+}
+
+export async function deleteQuestions(input: {
+  ids: string[];
+  path?: string;
+}): Promise<{ ok: boolean }> {
+  if (input.ids.length === 0) return { ok: true };
+  const supabase = await createClient();
+  const { error } = await supabase.from("questions").delete().in("id", input.ids);
+  if (error) {
+    console.error("deleteQuestions failed:", error);
+    return { ok: false };
+  }
+  if (input.path) revalidatePath(input.path);
+  return { ok: true };
+}
+
 export async function deleteAssessment(formData: FormData) {
   const supabase = await createClient();
   const id = String(formData.get("id") ?? "");
@@ -27,7 +74,7 @@ export type CreateAssessmentInput = {
 };
 
 export type CreateAssessmentResult =
-  | { ok: true; code: string }
+  | { ok: true; code: string; id: string }
   | { ok: false; error: string };
 
 // Unambiguous alphabet (no 0/O/1/I/L) for codes students type by hand.
@@ -75,17 +122,21 @@ export async function createAssessment(
   // Generate a unique code; retry on the rare unique-collision.
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateCode();
-    const { error } = await supabase.from("assessments").insert({
-      course_id: input.courseId,
-      title,
-      code,
-      status: "open",
-      window_open: input.opensAt || null,
-      window_close: input.closesAt || null,
-      config_json: config,
-    });
-    if (!error) return { ok: true, code };
-    if (error.code !== "23505") {
+    const { data: inserted, error } = await supabase
+      .from("assessments")
+      .insert({
+        course_id: input.courseId,
+        title,
+        code,
+        status: "open",
+        window_open: input.opensAt || null,
+        window_close: input.closesAt || null,
+        config_json: config,
+      })
+      .select("id")
+      .single();
+    if (!error && inserted) return { ok: true, code, id: (inserted as { id: string }).id };
+    if (error && error.code !== "23505") {
       console.error("createAssessment failed:", error);
       return { ok: false, error: error.message };
     }
