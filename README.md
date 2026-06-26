@@ -43,7 +43,6 @@
 
 ## 🧭 How It Works
 
-```
             ┌── Instructor (web) ──┐                ┌── Student (desktop) ──┐
 upload PDF ─▶ Storage + materials  │   enter code ─▶ validate_assessment_code
             │        │             │                │        │
@@ -52,7 +51,6 @@ upload PDF ─▶ Storage + materials  │   enter code ─▶ validate_assessme
             │                                          │
             ▼                                          ▼
    POST /generate ──▶ RAG retrieve ──▶ Claude ──▶ questions table ──▶ Question Pools (review/approve)
-```
 
 ---
 
