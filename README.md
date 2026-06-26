@@ -43,14 +43,7 @@
 
 ## 🧭 How It Works
 
-            ┌── Instructor (web) ──┐                ┌── Student (desktop) ──┐
-upload PDF ─▶ Storage + materials  │   enter code ─▶ validate_assessment_code
-            │        │             │                │        │
-            ▼        ▼             │                ▼        ▼
-   POST /ingest  (parse→chunk→embed→pgvector)   exam_questions RPC (approved, no answer key)
-            │                                          │
-            ▼                                          ▼
-   POST /generate ──▶ RAG retrieve ──▶ Claude ──▶ questions table ──▶ Question Pools (review/approve)
+<img width="2720" height="2480" alt="rag_assessment_architecture" src="https://github.com/user-attachments/assets/18d23fbe-87bb-4ea1-9460-8f401a6e3271" />
 
 ---
 
