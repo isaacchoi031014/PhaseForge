@@ -34,13 +34,14 @@ export type ExamQuestion = {
   difficulty: string
   prompt: string
   options: string[]
+  figure_svg?: string
 }
 
-/** Generated questions (no answer key) for an open assessment's course. */
-export async function fetchExamQuestions(
-  assessmentId: string,
-  limit = 1
-): Promise<ExamQuestion[]> {
+/**
+ * Approved questions (no answer key) for THIS assessment, in order.
+ * `limit = 0` serves the whole approved set; pass a positive number to cap it.
+ */
+export async function fetchExamQuestions(assessmentId: string, limit = 0): Promise<ExamQuestion[]> {
   const { data, error } = await supabase.rpc('exam_questions_for_assessment', {
     p_assessment_id: assessmentId,
     p_limit: limit
