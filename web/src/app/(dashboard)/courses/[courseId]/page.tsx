@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, FileText, FolderOpen, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, FileText, FolderOpen, Plus, Trash2, Users } from "lucide-react";
 
 import {
+  addStudents,
   createCategory,
   deleteCategory,
   deleteMaterial,
+  deleteStudent,
 } from "@/app/(dashboard)/courses/actions";
 import { MaterialUpload } from "@/components/dashboard/material-upload";
 import { createClient } from "@/lib/supabase/server";
@@ -24,6 +26,11 @@ type Material = {
   status: string;
   storage_path: string;
   error_message: string | null;
+};
+type Student = {
+  id: string;
+  name: string;
+  student_number: string;
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -93,7 +100,7 @@ export default async function CourseDetailPage({
   const { courseId } = await params;
   const supabase = await createClient();
 
-  const [{ data: courseData }, { data: categories }, { data: materials }] =
+  const [{ data: courseData }, { data: categories }, { data: materials }, { data: students }] =
     await Promise.all([
       supabase
         .from("courses")
@@ -110,6 +117,11 @@ export default async function CourseDetailPage({
         .select("id, filename, type, status, storage_path, error_message")
         .eq("course_id", courseId)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("students")
+        .select("id, name, student_number")
+        .eq("course_id", courseId)
+        .order("name", { ascending: true }),
     ]);
 
   const course = courseData as Course | null;
@@ -117,6 +129,7 @@ export default async function CourseDetailPage({
 
   const topics = (categories ?? []) as Topic[];
   const materialList = (materials ?? []) as Material[];
+  const roster = (students ?? []) as Student[];
   const topicOptions = topics.map((t) => ({ id: t.id, name: t.name }));
 
   const syllabus = materialList.find((m) => m.type === "syllabus");
@@ -270,6 +283,78 @@ export default async function CourseDetailPage({
         <div className="flex flex-col gap-3">
           {pastExams.map((m) => (
             <MaterialRow key={m.id} m={m} courseId={course.id} />
+          ))}
+        </div>
+      )}
+
+      {/* ── Roster ── */}
+      <div className="mt-12 mb-4 flex items-baseline gap-2">
+        <h2 className="font-display text-2xl">Roster</h2>
+        <span className="font-label-cosmic text-[10px] uppercase tracking-wider text-[#c4c7c8]/50">
+          {roster.length} student{roster.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <form
+        action={addStudents}
+        className="glass-panel mb-6 flex flex-col gap-3 rounded-2xl p-5"
+      >
+        <input type="hidden" name="course_id" value={course.id} />
+        <label className="font-label-cosmic mb-1 block text-[10px] uppercase tracking-widest text-[#c4c7c8]">
+          Paste roster (one per line: Name, Student ID)
+        </label>
+        <textarea
+          name="rows"
+          required
+          rows={4}
+          placeholder={"Jane Doe, UT-204113\nMarcus Lee, UT-209847"}
+          className="font-body-cosmic w-full resize-y rounded-lg border border-[#444748]/40 bg-[#1b1c1d] px-3 py-2.5 text-sm text-[#e3e2e3] outline-none transition placeholder:text-[#c4c7c8]/40 focus:border-white/40 focus:ring-1 focus:ring-white/20"
+        />
+        <button
+          type="submit"
+          className="active-glow flex w-fit items-center justify-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-[#16181a] transition hover:opacity-90 active:scale-[0.98]"
+        >
+          <Plus className="size-4" strokeWidth={2} />
+          Add students
+        </button>
+      </form>
+
+      {roster.length === 0 ? (
+        <div className="glass-panel flex flex-col items-center justify-center rounded-2xl border-dashed py-14 text-center">
+          <div className="flex size-12 items-center justify-center rounded-xl border border-[#444748]/40 bg-[#1b1c1d]">
+            <Users className="size-6 text-[#c4c7c8]/60" strokeWidth={1.5} />
+          </div>
+          <p className="mt-4 text-sm font-semibold text-[#e3e2e3]">
+            No students enrolled yet
+          </p>
+          <p className="mt-1 text-sm text-[#c4c7c8]/60">
+            Paste your roster above — the kiosk matches students against this list.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {roster.map((s) => (
+            <div
+              key={s.id}
+              className="glass-panel flex items-center justify-between rounded-2xl p-4"
+            >
+              <div>
+                <h3 className="text-sm font-semibold">{s.name}</h3>
+                <p className="mt-0.5 font-mono text-xs text-[#c4c7c8]/60">
+                  {s.student_number}
+                </p>
+              </div>
+              <form action={deleteStudent}>
+                <input type="hidden" name="id" value={s.id} />
+                <input type="hidden" name="course_id" value={course.id} />
+                <button
+                  type="submit"
+                  className="rounded-lg p-2 text-[#c4c7c8]/60 transition hover:bg-[#1b1c1d] hover:text-red-400"
+                  aria-label="Remove student"
+                >
+                  <Trash2 className="size-4" strokeWidth={1.5} />
+                </button>
+              </form>
+            </div>
           ))}
         </div>
       )}

@@ -70,6 +70,7 @@ export type CreateAssessmentInput = {
   perStudent: { id: string; name: string; count: number }[];
   opensAt: string | null;
   closesAt: string | null;
+  durationMinutes: number; // exam time limit once a student starts
   instructions: string;
 };
 
@@ -110,9 +111,15 @@ export async function createAssessment(
     topicNames = ((topics ?? []) as { name: string }[]).map((t) => t.name);
   }
 
+  // Clamp to a sane range; fall back to 60 if it arrives missing/invalid.
+  const minutes = Math.min(
+    600,
+    Math.max(1, Math.round(input.durationMinutes) || 60),
+  );
+
   const config = {
     questions: input.questions, // total per student
-    minutes: 60,
+    minutes,
     topics: topicNames,
     topicIds: input.topicIds,
     perStudent: input.perStudent, // [{ id, name, count }] — questions per topic, per student

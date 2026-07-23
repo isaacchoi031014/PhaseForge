@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react'
 import { type Assessment, type Student } from '../mock'
-import { fetchExamQuestions, type ExamQuestion } from '../supabase'
+import {
+  finishAttempt,
+  startOrResumeAttempt,
+  submitAnswer,
+  uploadWorkCapture,
+  type ExamQuestion
+} from '../supabase'
 import { WorkCapture } from './WorkCapture'
 import { useLockdown } from '../lockdown'
 
 const PROCTOR_PIN = '0000' // mock — replace with a real proctor credential later
+
+/** Seconds → "M:SS" for the exam countdown. */
+function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, totalSeconds)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
 
 export function ExamScreen({
   assessment,
@@ -16,27 +28,55 @@ export function ExamScreen({
   onExit: () => void
 }): React.JSX.Element {
   const { focusLost, violations } = useLockdown()
+  const [attemptId, setAttemptId] = useState<string | null>(null)
   const [questions, setQuestions] = useState<ExamQuestion[]>([])
   const [index, setIndex] = useState(0)
   // Answers are kept per question id, so navigating between questions preserves them.
   const [answers, setAnswers] = useState<Record<string, string>>({})
+  // Photo paths already saved from a prior session (kiosk resume) vs. one just captured now.
+  const [savedWorkPaths, setSavedWorkPaths] = useState<Record<string, string>>({})
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
   const [loadingQ, setLoadingQ] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [captured, setCaptured] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [showExit, setShowExit] = useState(false)
   const [pin, setPin] = useState('')
   const [pinError, setPinError] = useState(false)
+  // Placeholder until the attempt loads and replaces this with the server-anchored value.
+  const [remaining, setRemaining] = useState(
+    () => Math.max(1, Math.round(assessment.minutes) || 60) * 60
+  )
+  const [timedOut, setTimedOut] = useState(false)
 
-  // Pull the full set of approved, materials-grounded questions for this assessment.
+  // Start (or resume) this student's personalized attempt. Resuming returns
+  // the same questions and clock the student already started with — no
+  // reshuffle, no reset — plus any answers already saved.
   useEffect(() => {
     let active = true
-    fetchExamQuestions(assessment.id)
-      .then((qs) => {
-        if (active) setQuestions(qs)
+    startOrResumeAttempt(assessment.id, student.id)
+      .then((attempt) => {
+        if (!active) return
+        if (!attempt) {
+          setLoadError('This assessment is not open, or you are not on its roster.')
+          return
+        }
+        setAttemptId(attempt.attemptId)
+        setQuestions(attempt.questions)
+        const ansMap: Record<string, string> = {}
+        const pathMap: Record<string, string> = {}
+        for (const a of attempt.answers) {
+          ansMap[a.question_id] = a.answer_text
+          if (a.work_capture_path) pathMap[a.question_id] = a.work_capture_path
+        }
+        setAnswers(ansMap)
+        setSavedWorkPaths(pathMap)
+        const expiresMs = new Date(attempt.expiresAt).getTime()
+        const serverNowMs = new Date(attempt.serverNow).getTime()
+        setRemaining(Math.max(0, Math.round((expiresMs - serverNowMs) / 1000)))
       })
       .catch(() => {
-        if (active) setLoadError('Could not load the questions. Check the connection.')
+        if (active) setLoadError('Could not load the exam. Check the connection.')
       })
       .finally(() => {
         if (active) setLoadingQ(false)
@@ -44,7 +84,25 @@ export function ExamScreen({
     return () => {
       active = false
     }
-  }, [assessment.id])
+  }, [assessment.id, student.id])
+
+  // Tick down once per second; on the final tick the exam auto-submits (ends).
+  // State updates live inside the timeout callback (not the effect body) so we
+  // don't set state synchronously during render.
+  useEffect(() => {
+    if (done || remaining <= 0) return
+    const t = setTimeout(() => {
+      if (remaining <= 1) {
+        setRemaining(0)
+        setTimedOut(true)
+        setDone(true)
+        if (attemptId) finishAttempt(attemptId).catch(() => {})
+      } else {
+        setRemaining(remaining - 1)
+      }
+    }, 1000)
+    return () => clearTimeout(t)
+  }, [remaining, done, attemptId])
 
   function tryExit(): void {
     if (pin === PROCTOR_PIN) onExit()
@@ -56,31 +114,51 @@ export function ExamScreen({
   const answer = question ? (answers[question.id] ?? '') : ''
   const isMcq = question?.type === 'mcq' && question.options.length > 0
   const isLast = index >= total - 1
+  const captured = Boolean(photoDataUrl) || Boolean(question && savedWorkPaths[question.id])
 
   function setAnswer(value: string): void {
     if (question) setAnswers((prev) => ({ ...prev, [question.id]: value }))
   }
 
-  // Advance to the next question, or finish on the last one. Work-capture resets
-  // per question (WorkCapture is remounted via its `key`), so require it again.
-  function submitAndContinue(): void {
-    if (isLast) {
-      setDone(true)
-      return
+  // Save the answer (and any freshly captured photo) for this question, then
+  // advance — or finish the attempt on the last one. Work-capture resets per
+  // question (WorkCapture is remounted via its `key`), so require it again.
+  async function submitAndContinue(): Promise<void> {
+    if (!question || !attemptId || submitting) return
+    setSubmitting(true)
+    try {
+      let workCapturePath = savedWorkPaths[question.id]
+      if (photoDataUrl) {
+        workCapturePath = await uploadWorkCapture(attemptId, question.id, photoDataUrl)
+      }
+      await submitAnswer(attemptId, question.id, answer, workCapturePath)
+      if (isLast) {
+        await finishAttempt(attemptId)
+        setDone(true)
+      } else {
+        setIndex((i) => i + 1)
+        setPhotoDataUrl(null)
+      }
+    } catch {
+      setLoadError('Could not save your answer. Check the connection and try again.')
+    } finally {
+      setSubmitting(false)
     }
-    setIndex((i) => i + 1)
-    setCaptured(false)
   }
 
-  // Exam complete — a real submission/grading pass is a separate piece of work.
+  // Exam complete — a real grading pass is a separate piece of work.
   if (done) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-[#060607] text-center text-[#e3e2e3]">
         <div className="glass-panel max-w-md rounded-2xl p-10">
-          <h1 className="text-2xl font-semibold">You&apos;ve reached the end</h1>
+          <h1 className="text-2xl font-semibold">
+            {timedOut ? "Time's up" : "You've reached the end"}
+          </h1>
           <p className="mt-3 text-sm text-[#c4c7c8]">
-            You answered all {total} question{total === 1 ? '' : 's'}. Notify your proctor to end
-            the session.
+            {timedOut
+              ? 'Your time limit was reached and the exam ended.'
+              : `You answered all ${total} question${total === 1 ? '' : 's'}.`}{' '}
+            Notify your proctor to end the session.
           </p>
           <button
             onClick={() => {
@@ -135,6 +213,7 @@ export function ExamScreen({
   }
 
   const progressPct = total > 0 ? ((index + 1) / total) * 100 : 0
+  const lowTime = remaining <= 60 // last minute → red timer
 
   return (
     <div className="relative flex h-full flex-col bg-[#060607] text-[#e3e2e3]">
@@ -158,9 +237,19 @@ export function ExamScreen({
             <span className="font-semibold text-[#e3e2e3]">{total > 0 ? index + 1 : 0}</span> of{' '}
             {total}
           </span>
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#1b1c1d] px-4 py-1.5">
-            <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
-            <span className="font-mono text-sm tabular-nums">24:08</span>
+          <div
+            className={`flex items-center gap-2 rounded-full border px-4 py-1.5 ${
+              lowTime ? 'border-red-500/40 bg-red-500/10' : 'border-white/10 bg-[#1b1c1d]'
+            }`}
+          >
+            <span
+              className={`size-1.5 animate-pulse rounded-full ${
+                lowTime ? 'bg-red-400' : 'bg-emerald-400'
+              }`}
+            />
+            <span className={`font-mono text-sm tabular-nums ${lowTime ? 'text-red-300' : ''}`}>
+              {formatClock(remaining)}
+            </span>
           </div>
           <span className="text-[11px] uppercase tracking-widest text-[#c4c7c8]/50">
             {student.name}
@@ -261,7 +350,7 @@ export function ExamScreen({
               </span>
             </div>
             {/* Remount per question so captured work doesn't carry over. */}
-            <WorkCapture key={question?.id ?? 'none'} onChange={setCaptured} />
+            <WorkCapture key={question?.id ?? 'none'} onChange={setPhotoDataUrl} />
           </div>
         </section>
       </main>
@@ -280,10 +369,10 @@ export function ExamScreen({
         </button>
         <button
           onClick={submitAndContinue}
-          disabled={!question || !answer || !captured}
+          disabled={!question || !answer || !captured || submitting}
           className="rounded-xl bg-white px-7 py-3 text-sm font-semibold text-[#16181a] transition hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isLast ? 'Submit & finish' : 'Submit & continue'}
+          {submitting ? 'Saving…' : isLast ? 'Submit & finish' : 'Submit & continue'}
         </button>
       </footer>
 

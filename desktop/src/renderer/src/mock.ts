@@ -1,4 +1,4 @@
-// Mock data — replaced by the real backend (assessment codes + roster) in Phase 3.
+// Mock data — assessment codes + roster now come from Supabase (see supabase.ts).
 
 export type Student = {
   id: string
@@ -23,15 +23,6 @@ export type Question = {
   difficulty: string
   prompt: string
 }
-
-export const ROSTER: Student[] = [
-  { id: '1', name: 'Jane Doe', studentNumber: 'UT-204113' },
-  { id: '2', name: 'Marcus Lee', studentNumber: 'UT-209847' },
-  { id: '3', name: 'Priya Nair', studentNumber: 'UT-211002' },
-  { id: '4', name: 'Diego Alvarez', studentNumber: 'UT-198330' },
-  { id: '5', name: 'Sofia Rossi', studentNumber: 'UT-215576' },
-  { id: '6', name: 'Chen Wei', studentNumber: 'UT-220419' }
-]
 
 export const SAMPLE_QUESTION: Question = {
   index: 1,

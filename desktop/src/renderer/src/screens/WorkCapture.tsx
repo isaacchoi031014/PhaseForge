@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 export function WorkCapture({
   onChange
 }: {
-  onChange: (captured: boolean) => void
+  onChange: (photoDataUrl: string | null) => void
 }): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -20,7 +20,7 @@ export function WorkCapture({
   async function startCamera(): Promise<void> {
     setError(null)
     setPhoto(null)
-    onChange(false)
+    onChange(null)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1280 } },
@@ -57,9 +57,10 @@ export function WorkCapture({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    setPhoto(canvas.toDataURL('image/jpeg', 0.85))
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+    setPhoto(dataUrl)
     stopCamera() // turn the webcam off right after capturing
-    onChange(true)
+    onChange(dataUrl)
   }
 
   return (

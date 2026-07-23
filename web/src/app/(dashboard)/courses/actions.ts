@@ -102,3 +102,41 @@ export async function deleteCategory(formData: FormData) {
   if (error) console.error("deleteCategory failed:", error);
   revalidatePath(`/courses/${courseId}`);
 }
+
+// Bulk-enrolls students from a pasted "Name, StudentNumber" per line list —
+// the roster the kiosk matches against to identify who's taking an exam.
+export async function addStudents(formData: FormData) {
+  const supabase = await createClient();
+  const courseId = String(formData.get("course_id") ?? "");
+  const rows = String(formData.get("rows") ?? "");
+  if (!courseId || !rows.trim()) return;
+
+  const students = rows
+    .split("\n")
+    .map((line) => line.split(",").map((part) => part.trim()))
+    .filter(([name, studentNumber]) => name && studentNumber)
+    .map(([name, studentNumber]) => ({
+      course_id: courseId,
+      name,
+      student_number: studentNumber,
+    }));
+
+  if (students.length > 0) {
+    const { error } = await supabase
+      .from("students")
+      .upsert(students, { onConflict: "course_id,student_number" });
+    if (error) console.error("addStudents failed:", error);
+  }
+  revalidatePath(`/courses/${courseId}`);
+}
+
+export async function deleteStudent(formData: FormData) {
+  const supabase = await createClient();
+  const id = String(formData.get("id") ?? "");
+  const courseId = String(formData.get("course_id") ?? "");
+  if (!id) return;
+
+  const { error } = await supabase.from("students").delete().eq("id", id);
+  if (error) console.error("deleteStudent failed:", error);
+  revalidatePath(`/courses/${courseId}`);
+}

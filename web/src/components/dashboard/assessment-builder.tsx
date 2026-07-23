@@ -53,6 +53,7 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
   const [perStudent, setPerStudent] = useState<Record<string, number>>({});
   const [opensAt, setOpensAt] = useState("");
   const [closesAt, setClosesAt] = useState("");
+  const [durationMin, setDurationMin] = useState(60);
   const [instructions, setInstructions] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +128,7 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
       })),
       opensAt: opensAt || null,
       closesAt: closesAt || null,
+      durationMinutes: durationMin,
       instructions,
     });
     setCreating(false);
@@ -493,10 +495,10 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
         )}
       </Section>
 
-      {/* Window */}
+      {/* Window + time limit */}
       <Section
-        title="Assessment window"
-        desc="When students can take it. Each can start any time in the window."
+        title="Timing"
+        desc="When students can take it, and how long they get once they start."
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
@@ -517,6 +519,21 @@ export function AssessmentBuilder({ courses }: { courses: Course[] }) {
               className={fieldCls}
             />
           </div>
+        </div>
+        <div className="mt-4">
+          <label className={labelCls}>Time limit (minutes)</label>
+          <input
+            type="number"
+            min={1}
+            max={600}
+            value={durationMin}
+            onChange={(e) => setDurationMin(Math.max(1, Number(e.target.value) || 0))}
+            className={`${fieldCls} sm:max-w-[220px]`}
+          />
+          <p className="mt-2 text-xs text-[#c4c7c8]/50">
+            The countdown each student sees once they begin — separate from the open/close
+            window above.
+          </p>
         </div>
       </Section>
 

@@ -31,6 +31,32 @@ const STATUS_STYLES: Record<string, string> = {
   closed: "bg-red-500/10 text-red-400 border-red-500/20",
 };
 
+const ATTEMPT_STATUS_STYLES: Record<string, string> = {
+  in_progress: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  submitted: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+};
+
+type Attempt = {
+  id: string;
+  status: string;
+  started_at: string;
+  submitted_at: string | null;
+  student: { name: string; student_number: string } | null;
+};
+type AttemptQuestionRow = {
+  attempt_id: string;
+  question_id: string;
+  position: number;
+  topic: string;
+  prompt_snapshot: string;
+};
+type AnswerRow = {
+  attempt_id: string;
+  question_id: string;
+  answer_text: string;
+  work_capture_path: string | null;
+};
+
 function fmt(s: string | null): string {
   return s
     ? new Date(s).toLocaleString(undefined, {
@@ -73,8 +99,62 @@ export default async function AssessmentDetailPage({
     (q) => q.professor_review_status === "approved",
   ).length;
 
+  const { data: attemptData } = await supabase
+    .from("exam_attempts")
+    .select("id, status, started_at, submitted_at, student:students(name, student_number)")
+    .eq("assessment_id", id)
+    .order("started_at", { ascending: false });
+  const attempts = (attemptData ?? []) as unknown as Attempt[];
+  const attemptIds = attempts.map((x) => x.id);
+
+  const questionsByAttempt: Record<string, AttemptQuestionRow[]> = {};
+  const answersByAttempt: Record<string, Record<string, AnswerRow>> = {};
+  const signedPhotoUrls: Record<string, string> = {};
+
+  if (attemptIds.length > 0) {
+    const [{ data: aqData }, { data: ansData }] = await Promise.all([
+      supabase
+        .from("exam_attempt_questions")
+        .select("attempt_id, question_id, position, topic, prompt_snapshot")
+        .in("attempt_id", attemptIds)
+        .order("position", { ascending: true }),
+      supabase
+        .from("exam_answers")
+        .select("attempt_id, question_id, answer_text, work_capture_path")
+        .in("attempt_id", attemptIds),
+    ]);
+
+    for (const row of (aqData ?? []) as AttemptQuestionRow[]) {
+      (questionsByAttempt[row.attempt_id] ??= []).push(row);
+    }
+    for (const row of (ansData ?? []) as AnswerRow[]) {
+      (answersByAttempt[row.attempt_id] ??= {})[row.question_id] = row;
+    }
+
+    const photoPaths = ((ansData ?? []) as AnswerRow[])
+      .map((r) => r.work_capture_path)
+      .filter((p): p is string => Boolean(p));
+    if (photoPaths.length > 0) {
+      const { data: signedData } = await supabase.storage
+        .from("exam-work")
+        .createSignedUrls(photoPaths, 3600);
+      for (const s of signedData ?? []) {
+        if (s.signedUrl && s.path) signedPhotoUrls[s.path] = s.signedUrl;
+      }
+    }
+  }
+
   const cfg = a.config_json ?? {};
-  const topics = cfg.topics ?? [];
+  // Show the topics that actually have questions in this pool, not just the ones
+  // picked at creation — topics added later via "Add questions to this pool" should
+  // appear here too. Union the originally-selected topics (so a just-created
+  // assessment with no questions yet still lists them) with the pool's distinct topics.
+  const topics = [
+    ...new Set([
+      ...(cfg.topics ?? []),
+      ...questions.map((q) => q.topic).filter(Boolean),
+    ]),
+  ].sort((x, y) => x.localeCompare(y));
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -180,6 +260,94 @@ export default async function AssessmentDetailPage({
           Review in Question Pools
         </Link>
       </div>
+
+      {/* Submissions */}
+      <div className="mt-12 mb-4 flex items-baseline gap-2">
+        <h2 className="font-display text-2xl">Submissions</h2>
+        <span className="font-label-cosmic text-[10px] uppercase tracking-wider text-[#c4c7c8]/50">
+          {attempts.length} student{attempts.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      {attempts.length === 0 ? (
+        <div className="glass-panel mb-5 flex flex-col items-center justify-center rounded-2xl border-dashed py-14 text-center">
+          <p className="text-sm font-semibold text-[#e3e2e3]">No submissions yet</p>
+          <p className="mt-1 text-sm text-[#c4c7c8]/60">
+            Attempts appear here once a student starts on the kiosk.
+          </p>
+        </div>
+      ) : (
+        <div className="mb-5 flex flex-col gap-3">
+          {attempts.map((att) => {
+            const attQuestions = questionsByAttempt[att.id] ?? [];
+            const attAnswers = answersByAttempt[att.id] ?? {};
+            return (
+              <div key={att.id} className="glass-panel rounded-2xl p-6">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold">
+                      {att.student?.name ?? "Unknown student"}
+                    </h3>
+                    <p className="mt-0.5 font-mono text-xs text-[#c4c7c8]/60">
+                      {att.student?.student_number}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 text-right">
+                    <span
+                      className={`font-label-cosmic rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-wider ${
+                        ATTEMPT_STATUS_STYLES[att.status] ?? ATTEMPT_STATUS_STYLES.in_progress
+                      }`}
+                    >
+                      {att.status.replace("_", " ")}
+                    </span>
+                    <span className="text-xs text-[#c4c7c8]/60">
+                      {fmt(att.started_at)} → {fmt(att.submitted_at)}
+                    </span>
+                  </div>
+                </div>
+
+                {attQuestions.length > 0 && (
+                  <div className="mt-4 flex flex-col gap-3 border-t border-[#444748]/30 pt-4">
+                    {attQuestions.map((q) => {
+                      const ans = attAnswers[q.question_id];
+                      const photoUrl = ans?.work_capture_path
+                        ? signedPhotoUrls[ans.work_capture_path]
+                        : null;
+                      return (
+                        <div key={q.question_id} className="text-sm">
+                          <div className="font-label-cosmic text-[10px] uppercase tracking-wider text-[#c4c7c8]/50">
+                            {q.topic}
+                          </div>
+                          <p className="mt-1 text-[#c4c7c8]">{q.prompt_snapshot}</p>
+                          <div className="mt-1 flex items-center gap-3">
+                            <p className="text-[#e3e2e3]">
+                              {ans?.answer_text ? ans.answer_text : (
+                                <span className="text-[#c4c7c8]/50">No answer yet</span>
+                              )}
+                            </p>
+                            {photoUrl && (
+                              <a
+                                href={photoUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-[#c4c7c8] underline underline-offset-2 hover:text-[#e3e2e3]"
+                              >
+                                View photo
+                              </a>
+                            )}
+                            <span className="font-label-cosmic rounded-full border border-[#444748]/30 bg-[#343536] px-2 py-0.5 text-[9px] uppercase tracking-wider text-[#c4c7c8]/60">
+                              {ans ? "Pending grading" : "—"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <form action={deleteAssessment} className="flex justify-end pt-2">
         <input type="hidden" name="id" value={a.id} />

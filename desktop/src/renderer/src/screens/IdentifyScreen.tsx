@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { ROSTER, type Assessment, type Student } from '../mock'
+import { useEffect, useState } from 'react'
+import { type Assessment, type Student } from '../mock'
+import { matchRosterStudents } from '../supabase'
 import { Centered } from './CodeScreen'
 
 export function IdentifyScreen({
@@ -13,16 +14,35 @@ export function IdentifyScreen({
 }): React.JSX.Element {
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState<Student | null>(null)
+  const [matches, setMatches] = useState<Student[]>([])
+  const [searching, setSearching] = useState(false)
 
-  const matches = useMemo(() => {
-    const term = q.trim().toLowerCase()
-    if (!term) return []
-    return ROSTER.filter(
-      (s) =>
-        s.name.toLowerCase().includes(term) ||
-        s.studentNumber.toLowerCase().includes(term)
-    ).slice(0, 5)
-  }, [q])
+  // Debounced roster search — the RPC itself also requires 3+ characters.
+  useEffect(() => {
+    const term = q.trim()
+    let active = true
+    const t = setTimeout(() => {
+      if (term.length < 3) {
+        if (active) setMatches([])
+        return
+      }
+      if (active) setSearching(true)
+      matchRosterStudents(assessment.id, term)
+        .then((found) => {
+          if (active) setMatches(found)
+        })
+        .catch(() => {
+          if (active) setMatches([])
+        })
+        .finally(() => {
+          if (active) setSearching(false)
+        })
+    }, 300)
+    return () => {
+      active = false
+      clearTimeout(t)
+    }
+  }, [q, assessment.id])
 
   if (picked) {
     return (
@@ -34,8 +54,8 @@ export function IdentifyScreen({
           <h1 className="mt-4 text-2xl font-semibold">{picked.name}</h1>
           <p className="mt-1 font-mono text-sm text-[#c4c7c8]">{picked.studentNumber}</p>
           <p className="mt-6 text-sm text-[#c4c7c8]/70">
-            Starting <span className="text-[#e3e2e3]">{assessment.title}</span>. Show your
-            student ID to the proctor.
+            Starting <span className="text-[#e3e2e3]">{assessment.title}</span>. Show your student
+            ID to the proctor.
           </p>
           <div className="mt-7 flex gap-3">
             <button
@@ -72,7 +92,8 @@ export function IdentifyScreen({
         />
 
         <div className="mt-3 flex flex-col gap-2">
-          {q.trim() && matches.length === 0 && (
+          {searching && <p className="px-1 text-sm text-[#c4c7c8]/50">Searching…</p>}
+          {!searching && q.trim().length >= 3 && matches.length === 0 && (
             <p className="px-1 text-sm text-[#c4c7c8]/50">
               No roster match — check spelling or ask your proctor.
             </p>
