@@ -5,7 +5,7 @@ from app.core.supabase import get_supabase_client
 from app.core.config import get_settings
 
 ALLOWED_MATERIAL_TYPES = {"syllabus", "lecture", "notes", "past_exam"}
-ALLOWED_FILE_FORMAT = {".pdf"}
+ALLOWED_FILE_FORMAT = {".pdf", ".docx", ".pptx"}
 
 def validate_material_file_metadata(material: dict[str, Any]) -> None:
     storage_path = material.get("storage_path")

@@ -113,12 +113,12 @@ export function MaterialUpload({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1">
           <label className="font-label-cosmic mb-2 block text-[10px] uppercase tracking-widest text-[#c4c7c8]">
-            File (PDF)
+            File (PDF, Word, PowerPoint)
           </label>
           <input
             ref={fileRef}
             type="file"
-            accept=".pdf,application/pdf"
+            accept=".pdf,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
             className="block w-full text-sm text-[#c4c7c8] file:mr-3 file:rounded-md file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-[#16181a] hover:file:opacity-90"
           />
         </div>

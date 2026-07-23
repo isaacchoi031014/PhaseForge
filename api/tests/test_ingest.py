@@ -180,7 +180,7 @@ def test_ingestion_marks_done_after_success(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr("app.main.download_material_file", lambda storage_path: b"pdf bytes")
     monkeypatch.setattr("app.main.write_temp_material_file", lambda file_bytes, filename: Path("test.pdf"))
     monkeypatch.setattr(
-        "app.main.extract_pdf_text",
+        "app.main.extract_document_text",
         lambda path: ParsedDocument(
             text="[Page 1]\nThis parsed document has enough text for chunking.",
             page_count=1,
@@ -298,7 +298,7 @@ def test_ingestion_removes_temp_file(
 
     monkeypatch.setattr("app.main.write_temp_material_file", fake_write_temp_material_file)
     monkeypatch.setattr(
-        "app.main.extract_pdf_text",
+        "app.main.extract_document_text",
         lambda path: ParsedDocument(text="parsed text", page_count=1, parser="pymupdf"),
     )
     monkeypatch.setattr(
@@ -340,7 +340,7 @@ def test_ingestion_marks_error_after_chunking_failure(
     monkeypatch.setattr("app.main.download_material_file", lambda storage_path: b"pdf bytes")
     monkeypatch.setattr("app.main.write_temp_material_file", lambda file_bytes, filename: Path("test.pdf"))
     monkeypatch.setattr(
-        "app.main.extract_pdf_text",
+        "app.main.extract_document_text",
         lambda path: ParsedDocument(
             text="[Page 1]\nThis parsed document has enough text for chunking.",
             page_count=1,
@@ -386,7 +386,7 @@ def test_ingestion_marks_error_after_embedding_failure(
     monkeypatch.setattr("app.main.download_material_file", lambda storage_path: b"pdf bytes")
     monkeypatch.setattr("app.main.write_temp_material_file", lambda file_bytes, filename: Path("test.pdf"))
     monkeypatch.setattr(
-        "app.main.extract_pdf_text",
+        "app.main.extract_document_text",
         lambda path: ParsedDocument(
             text="[Page 1]\nThis parsed document has enough text for chunking.",
             page_count=1,

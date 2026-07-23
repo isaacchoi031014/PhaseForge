@@ -10,7 +10,8 @@ from app.core.auth import AuthenticatedUser, get_current_user
 from app.models.ingest import IngestRequest, IngestResponse
 from app.services.materials import get_owned_material, update_material_status, delete_material_chunks, insert_material_chunks
 from app.services.material_files import download_material_file, validate_material_file_metadata, write_temp_material_file
-from app.services.parsing import extract_pdf_text
+from app.services.parsing import extract_document_text
+from app.services.topics import suggest_and_save_topics_for_material
 from app.services.chunking import chunk_document_text
 from app.services.embeddings import generate_embeddings
 from app.services.retrieval import retrieve_top_chunks_for_material
@@ -72,7 +73,7 @@ def run_ingestion(material_id: UUID, material: dict[str, Any]) -> None:
         validate_material_file_metadata(material)
         file_bytes = download_material_file(str(material["storage_path"]))
         temp_path = write_temp_material_file(file_bytes, str(material["filename"]))
-        parsed_document = extract_pdf_text(temp_path)
+        parsed_document = extract_document_text(temp_path)
         chunks = chunk_document_text(parsed_document.text)
         if not chunks:
             raise ValueError("No retrievable chunks were generated from the material")
@@ -81,6 +82,13 @@ def run_ingestion(material_id: UUID, material: dict[str, Any]) -> None:
         delete_material_chunks(material_id)
         insert_material_chunks(material_id, chunks, embeddings)
         update_material_status(material_id, "done", None)
+        # Best-effort: suggest topics from this material so the professor doesn't
+        # have to type them all out. Never let a suggestion failure mark the
+        # (already-successful) ingestion as errored.
+        try:
+            suggest_and_save_topics_for_material(UUID(str(material["course_id"])), parsed_document.text)
+        except Exception as exc:
+            print(f"[topics] suggestion failed for material {material_id}: {exc}", flush=True)
     except Exception as exc:
         update_material_status(material_id, "error", str(exc))
     finally:
